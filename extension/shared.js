@@ -60,12 +60,12 @@ function createCard(root, { url, getPage = async () => null, extras = () => [] }
     if (job && job.error === null) timer = setTimeout(refresh, POLL_MS);
   }
 
-  async function add() {
+  async function start(kind) {
     busy = true;
     notice = null;
     redraw();
     try {
-      const result = await ask({ type: "job", url, kind: "check", page: await getPage() });
+      const result = await ask({ type: "job", url, kind, page: await getPage() });
       if (!result.ok && !result.offline) notice = result.message;
     } finally {
       busy = false;
@@ -74,8 +74,9 @@ function createCard(root, { url, getPage = async () => null, extras = () => [] }
     }
   }
 
-  function addButton(label) {
-    return el("button", { class: "vs-primary", disabled: busy, onclick: add }, label);
+  function jobButton(label, kind, primary = true) {
+    const style = primary ? "vs-primary" : "";
+    return el("button", { class: style, disabled: busy, onclick: () => start(kind) }, label);
   }
 
   function body() {
@@ -93,9 +94,18 @@ function createCard(root, { url, getPage = async () => null, extras = () => [] }
       return [el("span", { class: "vs-muted", role: "status" }, `${doing}: ${job.stage.toLowerCase()}…`)];
     }
     const problem = notice || (job && job.error);
-    if (problem) return [el("span", { class: "vs-error" }, problem), addButton("Try again")];
-    if (!item) return [addButton("Add to Summariser")];
-    return [el("span", {}, "Added ✓"), itemLink(item, "Open in Summariser"), ...extras(item)];
+    if (problem) {
+      const retry = job ? job.kind : "check";
+      return [el("span", { class: "vs-error" }, problem), jobButton("Try again", retry)];
+    }
+    if (!item) return [jobButton("Add to Summariser", "check")];
+    const shortened = item.playable || item.shortened;
+    return [
+      el("span", {}, "Added ✓"),
+      itemLink(item, "Open in Summariser"),
+      shortened ? null : jobButton("Shorten it", "shorten", false),
+      ...extras(item),
+    ].filter((node) => node !== null);
   }
 
   function redraw() {

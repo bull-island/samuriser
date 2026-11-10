@@ -192,4 +192,8 @@ async function mount() {
 }
 
 document.addEventListener("yt-navigate-finish", mount);
+// A video may be shortened or added elsewhere while this tab sits in the background.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) card?.refresh();
+});
 mount();

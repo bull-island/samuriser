@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Video Summariser",
-  "version": "0.3.4",
+  "version": "0.3.6",
   "description": "Adds videos and articles to your local Summariser with a right-click.",
   "permissions": ["activeTab", "scripting", "contextMenus"],
   "host_permissions": ["http://127.0.0.1:8765/*"],
