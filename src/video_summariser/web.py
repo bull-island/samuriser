@@ -4,6 +4,7 @@ import json
 import queue
 import re
 import threading
+import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +46,8 @@ PORT = 8765
 TIERS = (1, 2, 3)
 DEFAULT_RATIO = 0.3
 MAX_FAILED_JOBS_SHOWN = 5
+# Jobs still to do, kept on disk so that restarting the site doesn't lose them.
+JOBS_FILE = "jobs.json"
 # Without this, browsers keep reusing old copies of the site's files for hours after an update.
 ALWAYS_CHECK_FOR_UPDATES = {"Cache-Control": "no-cache"}
 
@@ -67,9 +70,22 @@ class Job:
     error: str | None = None
     # The page as the browser extension saw it, when it sent one.
     page: str | None = None
+    title: str | None = None
+    started: float | None = None
 
     def view(self) -> dict[str, Any]:
-        return {"kind": self.kind, "url": self.url, "stage": self.stage, "error": self.error}
+        return {
+            "kind": self.kind,
+            "url": self.url,
+            "title": self.title,
+            "stage": self.stage,
+            "error": self.error,
+            "seconds": int(time.monotonic() - self.started) if self.started is not None else 0,
+        }
+
+    def covers(self, other: "Job") -> bool:
+        """Whether this job already does everything the other one would."""
+        return self.kind == other.kind or (self.kind == "shorten" and other.kind == "check")
 
 
 class JobQueue:
@@ -80,16 +96,30 @@ class JobQueue:
         self._pending: queue.Queue[Job] = queue.Queue()
         self._jobs: list[Job] = []
         self._lock = threading.Lock()
+        saved = runs_dir / JOBS_FILE
+        for unfinished in json.loads(saved.read_text()) if saved.exists() else []:
+            self.add(Job(unfinished["kind"], unfinished["url"]))
 
-    def add(self, job: Job) -> None:
+    def _save(self) -> None:
+        unfinished = [{"kind": j.kind, "url": j.url} for j in self._jobs if j.error is None]
+        self.runs_dir.mkdir(parents=True, exist_ok=True)
+        (self.runs_dir / JOBS_FILE).write_text(json.dumps(unfinished, indent=1))
+
+    def add(self, job: Job) -> bool:
+        """Queue a job, unless one already under way for the same link covers it."""
         target = canonical_url(job.url)
         with self._lock:
+            same_link = [j for j in self._jobs if canonical_url(j.url) == target]
+            if any(j.error is None and j.covers(job) for j in same_link):
+                return False
             # A new attempt replaces an earlier failure for the same link.
             self._jobs = [
                 j for j in self._jobs if j.error is None or canonical_url(j.url) != target
             ]
             self._jobs.append(job)
+            self._save()
         self._pending.put(job)
+        return True
 
     def snapshot(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -109,8 +139,12 @@ class JobQueue:
         def report(stage: str) -> None:
             job.stage = stage
 
+        job.started = time.monotonic()
+        known = _find_by_url(self.runs_dir, job.url)
+        job.title = load_info(known).get("title") if known else None
         summarise_first = mark_watched if job.kind == "watched" else check
         summary = summarise_first(job.url, self.runs_dir, report, job.page)
+        job.title = summary.title
         add_link(summary.run_dir, canonical_url(job.url))
         if job.kind != "shorten":
             return
@@ -130,6 +164,8 @@ class JobQueue:
             else:
                 with self._lock:
                     self._jobs.remove(job)
+            with self._lock:
+                self._save()
 
 
 def player_ranges(run_dir: Path) -> Ranges:
@@ -400,9 +436,8 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
             raise HTTPException(status_code=400, detail=f"Not a video link: {invalid[:1] or ''}")
         # A page only belongs to the one link it was read from.
         page = request.page if len(urls) == 1 else None
-        for url in urls:
-            jobs.add(Job(request.kind, url, page=page))
-        return {"added": len(urls)}
+        added = [jobs.add(Job(request.kind, url, page=page)) for url in urls]
+        return {"added": sum(added)}
 
     @app.get("/api/lookup")
     def lookup(url: str) -> dict[str, Any]:

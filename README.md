@@ -40,7 +40,7 @@ The `extension/` folder adds Summariser to Chrome. It needs the local site runni
 
 - **Three-dot menu on YouTube thumbnails:** has an **Add to Summariser** item. YouTube has no supported way to extend that menu, so expect it to need fixing when YouTube changes.
 - **Right-click** any video thumbnail, link or page and choose **Add to Summariser**. It's added and checked in the background, and the verdict appears in the library.
-- **Toolbar button:** adds the page you're looking at, as you see it, which helps with sites you're logged in to.
+- **Toolbar button:** adds the page you're looking at, as you see it, which helps with sites you're logged in to. It also links to your library.
 - **On a YouTube video:** one line shows whether it's added. A shortened video can also play in YouTube's own player by jumping over the cuts.
 
 To install it, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and pick the `extension` folder. After changing its files, press the reload arrow on its card there.

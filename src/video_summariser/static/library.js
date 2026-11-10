@@ -1,4 +1,4 @@
-import { api, clock, el, roundedLength, verdictLabel } from "/static/ui.js";
+import { api, clock, el, jobProgress, roundedLength, verdictLabel } from "/static/ui.js";
 
 const ACTIVE_REFRESH_MS = 2000;
 const IDLE_REFRESH_MS = 10000;
@@ -14,8 +14,8 @@ function jobRow(job) {
   return el(
     "div",
     { class: failed ? "job failed" : "job" },
-    el("span", { class: "job-url" }, job.url),
-    el("span", { class: "muted" }, failed ? job.error : job.stage),
+    el("span", { class: "job-url" }, job.title || job.url),
+    el("span", { class: "muted" }, failed ? job.error : jobProgress(job)),
   );
 }
 
@@ -140,7 +140,7 @@ async function addLinks(kind) {
   try {
     const { added } = await api("/api/jobs", { urls: box.value.split("\n"), kind });
     box.value = "";
-    message.textContent = `Added ${added} to the queue.`;
+    message.textContent = added ? `Added ${added} to the queue.` : "Already in the queue.";
     refresh();
   } catch (error) {
     message.textContent = error.message;

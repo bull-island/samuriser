@@ -89,7 +89,8 @@ function createCard(root, { url, getPage = async () => null, extras = () => [] }
     if (!reply.ok) return [el("span", { class: "vs-error" }, reply.message)];
     const { item, job } = reply.data;
     if (job && job.error === null) {
-      return [el("span", { class: "vs-muted", role: "status" }, `Adding: ${job.stage.toLowerCase()}…`)];
+      const doing = job.kind === "shorten" ? "Shortening" : "Adding";
+      return [el("span", { class: "vs-muted", role: "status" }, `${doing}: ${job.stage.toLowerCase()}…`)];
     }
     const problem = notice || (job && job.error);
     if (problem) return [el("span", { class: "vs-error" }, problem), addButton("Try again")];

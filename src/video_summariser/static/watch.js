@@ -1,4 +1,4 @@
-import { VERDICT_LABELS, api, clock, el, roundedLength } from "/static/ui.js";
+import { VERDICT_LABELS, api, clock, el, followJob, jobProgress, roundedLength } from "/static/ui.js";
 
 const videoId = decodeURIComponent(location.pathname.split("/").pop());
 const video = document.getElementById("video");
@@ -377,17 +377,27 @@ function showPlayer() {
 
 function showNotReady() {
   document.getElementById("not-ready").hidden = false;
-  document.getElementById("not-ready-message").textContent = data.url
-    ? "This video hasn't been shortened yet."
-    : "This video is still being processed.";
+  const message = document.getElementById("not-ready-message");
   const button = document.getElementById("shorten");
-  button.hidden = !data.url;
-  button.addEventListener("click", async () => {
-    await api("/api/jobs", { urls: [data.url], kind: "shorten" });
-    document.getElementById("not-ready-message").textContent =
-      "Added to the queue. You can follow its progress in the library.";
+  if (!data.url) {
+    message.textContent = "This video is still being processed.";
     button.hidden = true;
+    return;
+  }
+  const show = (job) => {
+    const running = job !== null && job.error === null;
+    button.hidden = running;
+    if (running) message.textContent = jobProgress(job);
+    else if (job) message.textContent = `That didn't finish: ${job.error}`;
+    else message.textContent = "This video hasn't been shortened yet.";
+  };
+  const follow = () => followJob(data.url, (item) => item.playable, show);
+  button.addEventListener("click", async () => {
+    button.hidden = true;
+    await api("/api/jobs", { urls: [data.url], kind: "shorten" });
+    follow();
   });
+  follow();
 }
 
 async function load() {

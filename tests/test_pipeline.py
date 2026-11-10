@@ -978,7 +978,14 @@ def test_lookup_reports_the_job_working_on_a_link(tmp_path: Path) -> None:
 
     assert found.json() == {
         "item": None,
-        "job": {"kind": "check", "url": "https://youtu.be/abc", "stage": "Waiting", "error": None},
+        "job": {
+            "kind": "check",
+            "url": "https://youtu.be/abc",
+            "title": None,
+            "stage": "Waiting",
+            "error": None,
+            "seconds": 0,
+        },
     }
     assert "page" not in client.get("/api/videos").json()["jobs"][0]
 
@@ -996,6 +1003,61 @@ def test_trying_a_link_again_replaces_its_earlier_failure(tmp_path: Path) -> Non
         ("check", None),
         ("shorten", None),
     ]
+
+
+def test_the_same_link_is_not_queued_twice(tmp_path: Path) -> None:
+    client = TestClient(create_app(tmp_path, start_worker=False))
+
+    def add(link: str, kind: str) -> int:
+        added: int = client.post("/api/jobs", json={"urls": [link], "kind": kind}).json()["added"]
+        return added
+
+    assert add("https://youtu.be/abc", "shorten") == 1
+    assert add("https://www.youtube.com/watch?v=abc&t=3", "shorten") == 0
+    # Shortening includes the check, so asking for the check as well adds nothing.
+    assert add("https://youtu.be/abc", "check") == 0
+    assert add("https://youtu.be/other", "check") == 1
+    # A check doesn't shorten, so shortening can still be asked for.
+    assert add("https://youtu.be/other", "shorten") == 1
+    assert len(client.get("/api/videos").json()["jobs"]) == 3
+
+
+def test_unfinished_jobs_survive_a_restart_and_failed_ones_do_not(tmp_path: Path) -> None:
+    before = JobQueue(tmp_path)
+    before.add(Job("shorten", "https://youtu.be/abc", page="<html>"))
+    failed = Job("check", "https://youtu.be/broken")
+    before.add(failed)
+    failed.error = "No captions"
+    before.add(Job("check", "https://example.com/article"))
+
+    after = JobQueue(tmp_path)
+
+    assert [(j["kind"], j["url"], j["stage"]) for j in after.snapshot()] == [
+        ("shorten", "https://youtu.be/abc", "Waiting"),
+        ("check", "https://example.com/article", "Waiting"),
+    ]
+
+
+def test_a_running_job_shows_its_title_and_how_long_it_has_taken(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_dir = _library_video(tmp_path, "abc", False, "an idea")
+    save_info(run_dir, url="https://www.youtube.com/watch?v=abc")
+    seen: list[dict[str, Any]] = []
+    jobs = JobQueue(tmp_path)
+    job = Job("check", "https://youtu.be/abc")
+
+    def fake_check(*_: Any) -> pipeline.Summary:
+        seen.append(job.view())
+        return pipeline.Summary(run_dir, "Title abc", Digest(summary="s", ideas=[]))
+
+    monkeypatch.setattr("video_summariser.web.check", fake_check)
+
+    jobs._run(job)
+
+    assert seen[0]["title"] == "Title abc"
+    assert seen[0]["seconds"] >= 0
+    assert job.started is not None
 
 
 def test_a_job_uses_the_page_it_was_given_and_remembers_the_link(

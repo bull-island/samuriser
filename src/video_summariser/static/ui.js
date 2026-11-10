@@ -23,6 +23,28 @@ export function roundedLength(seconds) {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
+const JOB_NAMES = { check: "Checking", shorten: "Shortening", watched: "Adding" };
+const JOB_POLL_MS = 2000;
+
+// One line on how a job is getting on, such as "Shortening: deciding what to cut · 3 min so far".
+export function jobProgress(job) {
+  if (job.stage === "Waiting") return `${JOB_NAMES[job.kind]}: waiting for another job to finish`;
+  const taken = job.seconds < 60 ? `${job.seconds} s` : roundedLength(job.seconds);
+  return `${JOB_NAMES[job.kind]}: ${job.stage.toLowerCase()} · ${taken} so far`;
+}
+
+// Keeps `show` up to date with the job working on a link, and reloads the page once
+// `isDone` says the result is ready. `show` gets null when no job is running.
+export async function followJob(url, isDone, show) {
+  const { item, job } = await api(`/api/lookup?url=${encodeURIComponent(url)}`);
+  if (item && isDone(item)) {
+    location.reload();
+    return;
+  }
+  show(job);
+  if (job && job.error === null) setTimeout(() => followJob(url, isDone, show), JOB_POLL_MS);
+}
+
 export async function api(path, body) {
   const options = body === undefined
     ? {}

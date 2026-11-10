@@ -59,10 +59,18 @@
 .vs-menu-item:hover, .vs-menu-item:focus-visible { outline: none; background: var(--yt-spec-10-percent-layer, #e5e5e5); }
 .vs-menu-icon { width: 24px; font-size: 22px; line-height: 24px; text-align: center; }
 
-body.vs-popup { width: 340px; margin: 0; }
+body.vs-popup { width: 340px; margin: 0; background: #f2f2f2; }
 body.vs-popup .vs-panel { margin: 0; padding: 14px; border-radius: 0; }
+.vs-library {
+  display: block;
+  padding: 10px 14px 14px;
+  border-top: 1px solid #d3d3d3;
+  color: #065fd4;
+  font: 14px/1.45 Roboto, -apple-system, "Segoe UI", Arial, sans-serif;
+}
 @media (prefers-color-scheme: dark) {
   body.vs-popup { background: #262624; }
+  .vs-library { border-color: #4a4a46; color: #7fb4f5; }
   body.vs-popup .vs-panel {
     --vs-text: #f0efec;
     --vs-muted: #c3c2b7;

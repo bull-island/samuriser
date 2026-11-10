@@ -1,4 +1,4 @@
-import { api, el, roundedLength, verdictLabel } from "/static/ui.js";
+import { api, el, followJob, jobProgress, roundedLength, verdictLabel } from "/static/ui.js";
 
 const articleId = decodeURIComponent(location.pathname.split("/").pop());
 const apiPath = `/api/videos/${encodeURIComponent(articleId)}`;
@@ -391,15 +391,23 @@ async function toggleRead() {
 }
 
 function showNotReady() {
-  const panel = document.getElementById("not-ready");
+  const message = document.getElementById("not-ready-message");
   const button = document.getElementById("shorten");
-  panel.hidden = false;
+  document.getElementById("not-ready").hidden = false;
+  const show = (job) => {
+    const running = job !== null && job.error === null;
+    button.hidden = running;
+    if (running) message.textContent = jobProgress(job);
+    else if (job) message.textContent = `That didn't finish: ${job.error}`;
+    else message.textContent = "This article hasn't been shortened yet.";
+  };
+  const follow = () => followJob(data.url, (item) => item.shortened, show);
   button.addEventListener("click", async () => {
-    await api("/api/jobs", { urls: [data.url], kind: "shorten" });
-    document.getElementById("not-ready-message").textContent =
-      "Added to the queue. You can follow its progress in the library.";
     button.hidden = true;
+    await api("/api/jobs", { urls: [data.url], kind: "shorten" });
+    follow();
   });
+  follow();
 }
 
 async function load() {
