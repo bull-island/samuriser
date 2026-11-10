@@ -8,9 +8,12 @@ from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urldefrag, urlparse
 
 import yt_dlp
 from PIL import Image
+
+YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
 
 # H.264 up to 1080p keeps on-screen text legible and decodes quickly on any Mac.
 FORMAT = "bv*[height<=1080][vcodec^=avc1]+ba[ext=m4a]/b[height<=1080]/b"
@@ -52,6 +55,27 @@ def load_info(run_dir: Path) -> dict[str, Any]:
 def save_info(run_dir: Path, **fields: Any) -> None:
     """Add to a video's stored details without losing the ones already there."""
     (run_dir / "info.json").write_text(json.dumps(load_info(run_dir) | fields, indent=2))
+
+
+def canonical_url(url: str) -> str:
+    """Reduce a link to one form, so the same page is recognised however it was opened."""
+    parsed = urlparse(url)
+    video_id = None
+    if parsed.hostname in YOUTUBE_HOSTS and parsed.path == "/watch":
+        video_id = parse_qs(parsed.query).get("v", [None])[0]
+    elif parsed.hostname == "youtu.be":
+        video_id = parsed.path.strip("/") or None
+    if video_id:
+        return f"https://www.youtube.com/watch?v={video_id}"
+    return urldefrag(url).url
+
+
+def add_link(run_dir: Path, url: str) -> None:
+    """Remember a link that led to this item, for sites whose own address for it differs."""
+    info = load_info(run_dir)
+    links = info.get("links", [])
+    if url != info.get("url") and url not in links:
+        save_info(run_dir, links=[*links, url])
 
 
 def set_watched(run_dir: Path, watched: bool) -> None:

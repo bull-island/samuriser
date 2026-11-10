@@ -68,10 +68,12 @@ def _summarise_video(url: str, runs_dir: Path, report: Report) -> Summary:
     return Summary(details.run_dir, details.title, digest)
 
 
-def summarise(url: str, runs_dir: Path, report: Report = _ignore) -> Summary:
+def summarise(
+    url: str, runs_dir: Path, report: Report = _ignore, page: str | None = None
+) -> Summary:
     """Work out whether a link is an article or a video, then write its summary and key ideas."""
     report("Reading the page")
-    article = read_article(url)
+    article = read_article(url, page)
     if article is not None and article.is_long:
         return _summarise_article(article, runs_dir, report)
     try:
@@ -97,16 +99,19 @@ def shorten_article(
     )
 
 
-def check(url: str, runs_dir: Path, report: Report = _ignore) -> Summary:
-    summary = summarise(url, runs_dir, report)
+def check(url: str, runs_dir: Path, report: Report = _ignore, page: str | None = None) -> Summary:
+    summary = summarise(url, runs_dir, report, page)
     report("Comparing with what you've watched")
     check_video(summary.run_dir, summary.title, summary.digest, runs_dir)
     return summary
 
 
-def mark_watched(url: str, runs_dir: Path, report: Report = _ignore) -> None:
-    summary = summarise(url, runs_dir, report)
+def mark_watched(
+    url: str, runs_dir: Path, report: Report = _ignore, page: str | None = None
+) -> Summary:
+    summary = summarise(url, runs_dir, report, page)
     set_watched(summary.run_dir, True)
+    return summary
 
 
 def prepare(target: str, runs_dir: Path, ratio: float, report: Report = _ignore) -> Prepared:

@@ -56,9 +56,13 @@ def _site_name(url: str) -> str:
     return (urlparse(url).hostname or url).removeprefix("www.")
 
 
-def read_article(url: str) -> Article | None:
-    """Pull the main text out of a page, or return None if it isn't an article."""
-    html = download_page(url)
+def read_article(url: str, page: str | None = None) -> Article | None:
+    """Pull the main text out of a page, or return None if it isn't an article.
+
+    Pass `page` when the browser already has the page open, which also covers sites
+    that need a login.
+    """
+    html = page or download_page(url)
     if html is None:
         return None
     markdown = trafilatura.extract(

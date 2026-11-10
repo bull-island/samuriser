@@ -26,7 +26,7 @@ from video_summariser.decide import (
     validate_sections,
     with_sign_off,
 )
-from video_summariser.fetch import load_info, preview, save_info
+from video_summariser.fetch import canonical_url, load_info, preview, save_info
 from video_summariser.library import Check, Digest, Idea, check_video, known_ideas, search
 from video_summariser.llm import ask_claude
 from video_summariser.render import (
@@ -56,7 +56,7 @@ from video_summariser.transcribe import (
     transcribe,
     transcribe_quickly,
 )
-from video_summariser.web import create_app
+from video_summariser.web import Job, JobQueue, create_app
 
 FPS = Fraction(30)
 
@@ -829,7 +829,7 @@ def test_links_go_to_the_article_or_video_path(
             raise yt_dlp.utils.DownloadError("Unsupported URL")
         return video
 
-    monkeypatch.setattr(pipeline, "read_article", lambda _: _article("word " * words))
+    monkeypatch.setattr(pipeline, "read_article", lambda *_: _article("word " * words))
     monkeypatch.setattr(pipeline, "_summarise_video", fake_video)
     monkeypatch.setattr(pipeline, "ensure_digest", lambda *_: Digest(summary="s", ideas=[]))
 
@@ -844,7 +844,7 @@ def test_a_link_that_is_neither_explains_itself(
     def no_video(*_: Any) -> pipeline.Summary:
         raise yt_dlp.utils.DownloadError("Unsupported URL")
 
-    monkeypatch.setattr(pipeline, "read_article", lambda _: None)
+    monkeypatch.setattr(pipeline, "read_article", lambda *_: None)
     monkeypatch.setattr(pipeline, "_summarise_video", no_video)
 
     with pytest.raises(ValueError, match="No video or readable article"):
@@ -937,6 +937,100 @@ def test_only_current_english_voices_are_offered(monkeypatch: pytest.MonkeyPatch
         "video_summariser.speech.urllib.request.urlopen", lambda *_, **__: BytesIO(body)
     )
     assert list_voices() == ["af_sky", "bm_daniel"]
+
+
+@pytest.mark.parametrize(
+    ("link", "expected"),
+    [
+        (
+            "https://www.youtube.com/watch?v=abc&list=WL&t=21s",
+            "https://www.youtube.com/watch?v=abc",
+        ),
+        ("https://m.youtube.com/watch?v=abc", "https://www.youtube.com/watch?v=abc"),
+        ("https://youtu.be/abc?t=5", "https://www.youtube.com/watch?v=abc"),
+        ("https://example.com/post?page=2#comments", "https://example.com/post?page=2"),
+    ],
+)
+def test_links_to_the_same_page_reduce_to_one_form(link: str, expected: str) -> None:
+    assert canonical_url(link) == expected
+
+
+def test_lookup_recognises_a_saved_item_however_it_was_opened(tmp_path: Path) -> None:
+    run_dir = _library_video(tmp_path, "abc", False, "an idea")
+    save_info(run_dir, url="https://www.youtube.com/watch?v=abc", links=["https://vimeo.com/1"])
+    client = TestClient(create_app(tmp_path, start_worker=False))
+
+    def found(link: str) -> str | None:
+        item = client.get("/api/lookup", params={"url": link}).json()["item"]
+        return item["id"] if item else None
+
+    assert found("https://youtu.be/abc?t=9") == "abc"
+    assert found("https://vimeo.com/1#t=3") == "abc"
+    assert found("https://www.youtube.com/watch?v=other") is None
+
+
+def test_lookup_reports_the_job_working_on_a_link(tmp_path: Path) -> None:
+    client = TestClient(create_app(tmp_path, start_worker=False))
+    body = {"urls": ["https://youtu.be/abc"], "kind": "check", "page": "<html>big page</html>"}
+    client.post("/api/jobs", json=body)
+
+    found = client.get("/api/lookup", params={"url": "https://www.youtube.com/watch?v=abc&t=4"})
+
+    assert found.json() == {
+        "item": None,
+        "job": {"kind": "check", "url": "https://youtu.be/abc", "stage": "Waiting", "error": None},
+    }
+    assert "page" not in client.get("/api/videos").json()["jobs"][0]
+
+
+def test_trying_a_link_again_replaces_its_earlier_failure(tmp_path: Path) -> None:
+    jobs = JobQueue(tmp_path)
+    failed = Job("check", "https://youtu.be/abc")
+    jobs.add(failed)
+    failed.error = "No captions"
+    jobs.add(Job("check", "https://example.com/other"))
+
+    jobs.add(Job("shorten", "https://www.youtube.com/watch?v=abc"))
+
+    assert [(j["kind"], j["error"]) for j in jobs.snapshot()] == [
+        ("check", None),
+        ("shorten", None),
+    ]
+
+
+def test_a_job_uses_the_page_it_was_given_and_remembers_the_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_dir = _library_video(tmp_path, "abc", False, "an idea")
+    save_info(run_dir, url="https://player.example.com/abc")
+    pages: list[str | None] = []
+
+    def fake_check(url: str, runs_dir: Path, report: Any, page: str | None) -> pipeline.Summary:
+        pages.append(page)
+        return pipeline.Summary(run_dir, "T", Digest(summary="s", ideas=[]))
+
+    monkeypatch.setattr("video_summariser.web.check", fake_check)
+    app = create_app(tmp_path, start_worker=False)
+
+    JobQueue(tmp_path)._run(Job("check", "https://example.com/watch/abc#t=1", page="<html>"))
+
+    assert pages == ["<html>"]
+    found = TestClient(app).get("/api/lookup", params={"url": "https://example.com/watch/abc"})
+    assert found.json()["item"]["id"] == "abc"
+
+
+def test_a_page_from_the_browser_is_read_without_downloading_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def must_not_download(_: str) -> None:
+        raise AssertionError("The page was already supplied")
+
+    monkeypatch.setattr("video_summariser.articles.download_page", must_not_download)
+
+    article = read_article("https://example.com/members-only", ARTICLE_PAGE)
+
+    assert article is not None
+    assert article.title == "A Long Read"
 
 
 def test_marking_as_watched_is_saved(site: tuple[TestClient, Path]) -> None:

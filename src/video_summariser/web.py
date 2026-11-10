@@ -19,7 +19,13 @@ from starlette.types import Scope
 
 from video_summariser.articles import is_article, load_blocks
 from video_summariser.decide import Section, load_sections, save_sections, timestamp
-from video_summariser.fetch import THUMBNAIL_FILE, load_info, set_watched
+from video_summariser.fetch import (
+    THUMBNAIL_FILE,
+    add_link,
+    canonical_url,
+    load_info,
+    set_watched,
+)
 from video_summariser.library import (
     Check,
     Digest,
@@ -59,6 +65,11 @@ class Job:
     url: str
     stage: str = "Waiting"
     error: str | None = None
+    # The page as the browser extension saw it, when it sent one.
+    page: str | None = None
+
+    def view(self) -> dict[str, Any]:
+        return {"kind": self.kind, "url": self.url, "stage": self.stage, "error": self.error}
 
 
 class JobQueue:
@@ -71,27 +82,41 @@ class JobQueue:
         self._lock = threading.Lock()
 
     def add(self, job: Job) -> None:
+        target = canonical_url(job.url)
         with self._lock:
+            # A new attempt replaces an earlier failure for the same link.
+            self._jobs = [
+                j for j in self._jobs if j.error is None or canonical_url(j.url) != target
+            ]
             self._jobs.append(job)
         self._pending.put(job)
 
     def snapshot(self) -> list[dict[str, Any]]:
         with self._lock:
-            active = [asdict(j) for j in self._jobs if j.error is None]
-            failed = [asdict(j) for j in self._jobs if j.error is not None]
+            active = [j.view() for j in self._jobs if j.error is None]
+            failed = [j.view() for j in self._jobs if j.error is not None]
         return [*active, *failed[-MAX_FAILED_JOBS_SHOWN:]]
+
+    def find(self, url: str) -> dict[str, Any] | None:
+        """The job for a link, preferring one still running over one that failed."""
+        target = canonical_url(url)
+        with self._lock:
+            matches = [j for j in self._jobs if canonical_url(j.url) == target]
+        matches.sort(key=lambda j: j.error is not None)
+        return matches[0].view() if matches else None
 
     def _run(self, job: Job) -> None:
         def report(stage: str) -> None:
             job.stage = stage
 
-        if job.kind == "watched":
-            mark_watched(job.url, self.runs_dir, report)
+        summarise_first = mark_watched if job.kind == "watched" else check
+        summary = summarise_first(job.url, self.runs_dir, report, job.page)
+        add_link(summary.run_dir, canonical_url(job.url))
+        if job.kind != "shorten":
             return
-        summary = check(job.url, self.runs_dir, report)
-        if job.kind == "shorten" and is_article(summary.run_dir):
+        if is_article(summary.run_dir):
             shorten_article(summary, self.runs_dir, DEFAULT_RATIO, report)
-        elif job.kind == "shorten":
+        else:
             prepare(job.url, self.runs_dir, DEFAULT_RATIO, report)
             player_ranges(summary.run_dir)
 
@@ -277,9 +302,19 @@ def _detail(run_dir: Path, runs_dir: Path) -> dict[str, Any]:
     )
 
 
+def _find_by_url(runs_dir: Path, url: str) -> Path | None:
+    target = canonical_url(url)
+    for run_dir in video_dirs(runs_dir):
+        info = load_info(run_dir)
+        if target == info.get("url") or target in info.get("links", []):
+            return run_dir
+    return None
+
+
 class JobRequest(BaseModel):
     urls: list[str]
     kind: JobKind
+    page: str | None = None
 
 
 class SectionChange(BaseModel):
@@ -363,9 +398,18 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
         invalid = [u for u in urls if not _is_web_link(u)]
         if invalid or not urls:
             raise HTTPException(status_code=400, detail=f"Not a video link: {invalid[:1] or ''}")
+        # A page only belongs to the one link it was read from.
+        page = request.page if len(urls) == 1 else None
         for url in urls:
-            jobs.add(Job(request.kind, url))
+            jobs.add(Job(request.kind, url, page=page))
         return {"added": len(urls)}
+
+    @app.get("/api/lookup")
+    def lookup(url: str) -> dict[str, Any]:
+        """What's known about a link: the saved item, and any job working on it."""
+        run_dir = _find_by_url(runs_dir, url)
+        item = _detail(run_dir, runs_dir) if run_dir else None
+        return {"item": item, "job": jobs.find(url)}
 
     @app.get("/api/videos/{video_id}")
     def video_detail(video_id: str) -> dict[str, Any]:

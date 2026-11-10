@@ -1,0 +1,73 @@
+/* Sizes are in px because YouTube sets an unusual root font size. Colours follow
+   YouTube's own theme where it defines one. */
+.vs-panel {
+  --vs-text: var(--yt-spec-text-primary, #0f0f0f);
+  --vs-muted: var(--yt-spec-text-secondary, #606060);
+  --vs-surface: var(--yt-spec-badge-chip-background, #f2f2f2);
+  --vs-line: var(--yt-spec-10-percent-layer, #d3d3d3);
+  --vs-link: var(--yt-spec-call-to-action, #065fd4);
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--vs-surface);
+  color: var(--vs-text);
+  font: 14px/1.45 Roboto, -apple-system, "Segoe UI", Arial, sans-serif;
+}
+
+.vs-panel.vs-floating { position: fixed; right: 16px; bottom: 16px; z-index: 3000; max-width: 340px; }
+.vs-panel a { color: var(--vs-link); }
+.vs-muted { color: var(--vs-muted); }
+.vs-error { color: var(--yt-spec-error-indicator, #c00); }
+/* Takes a row of its own under the controls. */
+.vs-wide { flex-basis: 100%; }
+
+.vs-panel button, .vs-panel select {
+  padding: 4px 12px;
+  border: 1px solid var(--vs-line);
+  border-radius: 16px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.vs-panel select { max-width: 100%; }
+.vs-panel button:hover:not(:disabled) { border-color: var(--vs-muted); }
+.vs-panel button:disabled { opacity: 0.6; cursor: default; }
+.vs-panel button.vs-primary { border-color: #1f6fd0; background: #1f6fd0; color: #fff; }
+.vs-panel button:focus-visible, .vs-panel select:focus-visible, .vs-panel a:focus-visible {
+  outline: 2px solid var(--vs-link);
+  outline-offset: 2px;
+}
+
+/* The item added to YouTube's own three-dot menu, sized to sit with YouTube's items. */
+.vs-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 16px;
+  color: var(--yt-spec-text-primary, #0f0f0f);
+  font: 400 14px/20px Roboto, Arial, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.vs-menu-item:hover, .vs-menu-item:focus-visible { outline: none; background: var(--yt-spec-10-percent-layer, #e5e5e5); }
+.vs-menu-icon { width: 24px; font-size: 22px; line-height: 24px; text-align: center; }
+
+body.vs-popup { width: 340px; margin: 0; }
+body.vs-popup .vs-panel { margin: 0; padding: 14px; border-radius: 0; }
+@media (prefers-color-scheme: dark) {
+  body.vs-popup { background: #262624; }
+  body.vs-popup .vs-panel {
+    --vs-text: #f0efec;
+    --vs-muted: #c3c2b7;
+    --vs-surface: #262624;
+    --vs-line: #4a4a46;
+    --vs-link: #7fb4f5;
+  }
+}
