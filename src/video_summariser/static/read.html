@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Read</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="page">
+    <a href="/" class="back">← Library</a>
+    <h1 id="title"></h1>
+    <p id="meta" class="muted"></p>
+    <div id="verdict"></div>
+
+    <section id="not-ready" class="panel" hidden>
+      <p id="not-ready-message">This article hasn't been shortened yet.</p>
+      <button id="shorten" class="primary">Shorten this article</button>
+    </section>
+
+    <div class="controls reading-controls">
+      <div id="lengths" class="segmented" role="group" aria-label="Length"></div>
+      <button id="watched"></button>
+    </div>
+    <div id="listen" class="controls reading-controls" hidden>
+      <button id="listen-button" class="primary"></button>
+      <div id="speeds" class="segmented" role="group" aria-label="Speech speed"></div>
+      <select id="voice" aria-label="Voice" hidden></select>
+    </div>
+
+    <h2>Summary</h2>
+    <p id="summary"></p>
+    <details class="reading-ideas">
+      <summary id="ideas-label"></summary>
+      <ol id="ideas" class="ideas"></ol>
+    </details>
+
+    <article id="article" class="article-body"></article>
+  </main>
+  <script type="module" src="/static/read.js"></script>
+</body>
+</html>

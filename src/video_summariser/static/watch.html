@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watch</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <main class="page wide">
+    <a href="/" class="back">← Library</a>
+    <h1 id="title"></h1>
+    <div id="verdict"></div>
+
+    <section id="player" hidden>
+      <video id="video" controls playsinline preload="metadata"></video>
+      <div class="bars">
+        <span class="bar-label">Full</span>
+        <canvas id="full-bar" class="bar"></canvas>
+        <span id="full-time" class="time"></span>
+        <span class="bar-label">Short</span>
+        <canvas id="short-bar" class="bar"></canvas>
+        <span id="short-time" class="time"></span>
+      </div>
+      <p id="chapter" class="chapter"></p>
+      <div class="controls">
+        <div id="lengths" class="segmented" role="group" aria-label="Length"></div>
+        <div id="speeds" class="segmented" role="group" aria-label="Speed"></div>
+        <button id="watched"></button>
+      </div>
+    </section>
+
+    <section id="not-ready" class="panel" hidden>
+      <p id="not-ready-message"></p>
+      <button id="shorten" class="primary">Shorten this video</button>
+    </section>
+
+    <div class="columns">
+      <section>
+        <h2>Summary</h2>
+        <p id="summary"></p>
+        <h2>Key ideas</h2>
+        <ol id="ideas" class="ideas"></ol>
+      </section>
+      <section id="sections-column" hidden>
+        <h2>Sections</h2>
+        <div id="sections"></div>
+      </section>
+    </div>
+    <div id="tip" class="tip" hidden></div>
+  </main>
+  <script type="module" src="/static/watch.js"></script>
+</body>
+</html>
