@@ -1,4 +1,4 @@
-import { api, clock, el, jobProgress, roundedLength, verdictLabel } from "/static/ui.js";
+import { api, clock, el, jobBar, jobStage, paddingBadge, roundedLength, verdictLabel } from "/static/ui.js";
 
 const ACTIVE_REFRESH_MS = 2000;
 const IDLE_REFRESH_MS = 10000;
@@ -15,7 +15,9 @@ function jobRow(job) {
     "div",
     { class: failed ? "job failed" : "job" },
     el("span", { class: "job-url" }, job.title || job.url),
-    el("span", { class: "muted" }, failed ? job.error : jobProgress(job)),
+    el("span", { class: "muted job-stage" }, failed ? job.error : jobStage(job)),
+    failed ? null : jobBar(job),
+    failed ? null : el("span", { class: "muted job-percent" }, `${job.progress}%`),
   );
 }
 
@@ -43,18 +45,36 @@ function card(video) {
       "a",
       { class: "thumb", href, tabindex: "-1", "aria-hidden": "true" },
       video.thumbnail ? el("img", { src: `/thumbnail/${id}`, alt: "" }) : null,
+      el("span", { class: "kind" }, video.kind === "article" ? "Article" : "Video"),
     ),
     el(
       "div",
       {},
-      el("a", { class: "video-title", href }, video.title),
+      el(
+        "div",
+        { class: "video-head" },
+        el("a", { class: "video-title", href }, video.title),
+        el(
+          "button",
+          {
+            class: "remove",
+            title: "Remove",
+            "aria-label": `Remove ${video.title}`,
+            onclick: () => remove(video),
+          },
+          "×",
+        ),
+      ),
       el(
         "div",
         { class: "video-meta" },
+        video.watched ? el("span", { class: "badge seen" }, watchedLabel(video)) : null,
         video.verdict
           ? el("span", { class: `badge ${video.verdict}` }, verdictLabel(video.kind, video.verdict))
           : null,
-        video.watched ? el("span", { class: "badge" }, watchedLabel(video)) : null,
+        paddingBadge(video),
+        // The label on the picture is hidden from screen readers along with its link.
+        el("span", { class: "visually-hidden" }, video.kind === "article" ? "Article" : "Video"),
         video.platform ? el("span", { class: "muted" }, video.platform) : null,
         el("span", { class: "muted" }, lengths(video) || ""),
       ),
@@ -62,6 +82,19 @@ function card(video) {
       video.summary ? el("p", { class: "muted clamp" }, video.summary) : null,
     ),
   );
+}
+
+async function remove(video) {
+  const what = video.kind === "article" ? "article" : "video";
+  const consequence = video.watched ? " It will also leave your history." : "";
+  const question = `Remove “${video.title}”? Its summary and any downloaded ${what} are deleted.${consequence}`;
+  if (!confirm(question)) return;
+  try {
+    await api(`/api/videos/${encodeURIComponent(video.id)}/remove`, {});
+  } catch (error) {
+    document.getElementById("add-message").textContent = error.message;
+  }
+  refresh();
 }
 
 function showList(container, nodes) {

@@ -1,8 +1,10 @@
 """A local website for checking, shortening and watching videos."""
 
 import json
+import math
 import queue
 import re
+import shutil
 import threading
 import time
 from dataclasses import asdict, dataclass
@@ -35,7 +37,7 @@ from video_summariser.library import (
     sentences_for,
     video_dirs,
 )
-from video_summariser.pipeline import check, mark_watched, prepare, shorten_article
+from video_summariser.pipeline import PLANS, check, mark_watched, prepare, shorten_article
 from video_summariser.render import build_chapters, load_energy, probe_video, tier_segments
 from video_summariser.speech import is_voice_name, list_voices, write_speech
 from video_summariser.transcribe import Sentence, load_sentences
@@ -44,7 +46,6 @@ STATIC_DIR = Path(__file__).parent / "static"
 HOST = "127.0.0.1"
 PORT = 8765
 TIERS = (1, 2, 3)
-DEFAULT_RATIO = 0.3
 MAX_FAILED_JOBS_SHOWN = 5
 # Jobs still to do, kept on disk so that restarting the site doesn't lose them.
 JOBS_FILE = "jobs.json"
@@ -71,7 +72,30 @@ class Job:
     # The page as the browser extension saw it, when it sent one.
     page: str | None = None
     title: str | None = None
-    started: float | None = None
+    # Where the job is in its kind's plan, and when it got there.
+    step: int = -1
+    stage_started: float = 0.0
+
+    def enter(self, stage: str) -> None:
+        """Move on to a stage, skipping any earlier ones that didn't apply."""
+        plan = PLANS[self.kind]
+        ahead = [i for i, (name, _) in enumerate(plan) if name == stage and i > self.step]
+        if ahead:
+            self.step = ahead[0]
+        self.stage = stage
+        self.stage_started = time.monotonic()
+
+    def progress(self) -> int:
+        """A rough percentage: finished stages, plus a share of the current one that grows
+        with time but never quite completes it."""
+        if self.step < 0:
+            return 0
+        plan = PLANS[self.kind]
+        typical = plan[self.step][1]
+        finished = sum(seconds for _, seconds in plan[: self.step])
+        elapsed = time.monotonic() - self.stage_started
+        under_way = typical * (1 - math.exp(-elapsed / typical))
+        return min(int(100 * (finished + under_way) / sum(s for _, s in plan)), 99)
 
     def view(self) -> dict[str, Any]:
         return {
@@ -80,7 +104,7 @@ class Job:
             "title": self.title,
             "stage": self.stage,
             "error": self.error,
-            "seconds": int(time.monotonic() - self.started) if self.started is not None else 0,
+            "progress": self.progress(),
         }
 
     def covers(self, other: "Job") -> bool:
@@ -136,22 +160,18 @@ class JobQueue:
         return matches[0].view() if matches else None
 
     def _run(self, job: Job) -> None:
-        def report(stage: str) -> None:
-            job.stage = stage
-
-        job.started = time.monotonic()
         known = _find_by_url(self.runs_dir, job.url)
         job.title = load_info(known).get("title") if known else None
         summarise_first = mark_watched if job.kind == "watched" else check
-        summary = summarise_first(job.url, self.runs_dir, report, job.page)
+        summary = summarise_first(job.url, self.runs_dir, job.enter, job.page)
         job.title = summary.title
         add_link(summary.run_dir, canonical_url(job.url))
         if job.kind != "shorten":
             return
         if is_article(summary.run_dir):
-            shorten_article(summary, self.runs_dir, DEFAULT_RATIO, report)
+            shorten_article(summary, self.runs_dir, report=job.enter)
         else:
-            prepare(job.url, self.runs_dir, DEFAULT_RATIO, report)
+            prepare(job.url, self.runs_dir, report=job.enter)
             player_ranges(summary.run_dir)
 
     def run_forever(self) -> None:
@@ -275,6 +295,7 @@ def _card(run_dir: Path) -> dict[str, Any]:
         "thumbnail": (run_dir / THUMBNAIL_FILE).exists(),
         "playable": playable,
         "summary": digest.summary if digest else None,
+        "padding": digest.padding if digest else None,
         "verdict": verdict.verdict if verdict else None,
         "reason": verdict.reason if verdict else None,
         "last_activity": _last_activity(run_dir, info),
@@ -467,6 +488,21 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
     def change_watched(video_id: str, change: WatchedChange) -> dict[str, bool]:
         set_watched(run_dir_for(video_id), change.watched)
         return {"watched": change.watched}
+
+    @app.post("/api/videos/{video_id}/remove")
+    def remove_video(video_id: str) -> dict[str, bool]:
+        """Delete an item and everything stored for it, including its place in the history."""
+        run_dir = run_dir_for(video_id)
+        info = load_info(run_dir)
+        for link in [info.get("url"), *info.get("links", [])]:
+            job = jobs.find(link) if link else None
+            if job is not None and job["error"] is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="It's still being worked on. Try again when that finishes.",
+                )
+        shutil.rmtree(run_dir)
+        return {"removed": True}
 
     @app.get("/api/search")
     def search_videos(q: str) -> list[dict[str, Any]]:

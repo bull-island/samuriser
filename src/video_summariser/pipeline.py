@@ -7,7 +7,7 @@ from pathlib import Path
 import yt_dlp
 
 from video_summariser.articles import Article, read_article, save_article
-from video_summariser.decide import ARTICLE_PROMPT, Section, decide
+from video_summariser.decide import ARTICLE_PROMPT, Section, decide, target_for
 from video_summariser.fetch import (
     Source,
     fetch_audio,
@@ -27,6 +27,29 @@ from video_summariser.transcribe import Sentence, extract_audio, transcribe, tra
 from video_summariser.visuals import describe_visuals
 
 Report = Callable[[str], None]
+
+# The stages each kind of job reports, in order, with roughly how many seconds each takes.
+# They only drive a progress bar, so the figures needn't be exact. A job skips the stages
+# that don't apply to it, such as downloading for an article.
+_CHECK_PLAN: list[tuple[str, float]] = [
+    ("Reading the page", 3),
+    ("Reading captions", 8),
+    ("No captions, so transcribing the sound", 40),
+    ("Writing the summary", 20),
+    ("Comparing with what you've watched", 12),
+]
+PLANS: dict[str, list[tuple[str, float]]] = {
+    "check": _CHECK_PLAN,
+    "watched": _CHECK_PLAN[:-1],
+    "shorten": [
+        *_CHECK_PLAN,
+        ("Downloading the video", 40),
+        ("Transcribing", 80),
+        ("Writing the summary", 2),
+        ("Looking at what's on screen", 25),
+        ("Deciding what to cut", 150),
+    ],
+}
 
 
 def _ignore(_: str) -> None:
@@ -85,15 +108,16 @@ def summarise(
 
 
 def shorten_article(
-    summary: Summary, runs_dir: Path, ratio: float, report: Report = _ignore
+    summary: Summary, runs_dir: Path, ratio: float | None = None, report: Report = _ignore
 ) -> None:
+    """Cut an article. Without a `ratio`, the target follows how padded it is."""
     report("Deciding what to cut")
     decide(
         summary.title,
         [],
         sentences_for(summary.run_dir) or [],
         summary.run_dir,
-        ratio,
+        ratio if ratio is not None else target_for(summary.digest.padding),
         known_ideas(runs_dir, summary.run_dir),
         system_prompt=ARTICLE_PROMPT,
     )
@@ -114,15 +138,20 @@ def mark_watched(
     return summary
 
 
-def prepare(target: str, runs_dir: Path, ratio: float, report: Report = _ignore) -> Prepared:
-    """Do everything up to the edit decisions. Each stage reuses earlier results."""
+def prepare(
+    target: str, runs_dir: Path, ratio: float | None = None, report: Report = _ignore
+) -> Prepared:
+    """Do everything up to the edit decisions. Each stage reuses earlier results.
+
+    Without a `ratio`, the target follows how padded the video is.
+    """
     report("Downloading the video")
     source = get_source(target, runs_dir)
     report("Transcribing")
     sentences = transcribe(source.video, source.run_dir)
     extract_audio(source.video, source.run_dir / "audio.wav")
     report("Writing the summary")
-    ensure_digest(source.run_dir, source.title, sentences)
+    digest = ensure_digest(source.run_dir, source.title, sentences)
     report("Looking at what's on screen")
     on_screen = describe_visuals(source.video, source.run_dir)
     report("Deciding what to cut")
@@ -131,7 +160,7 @@ def prepare(target: str, runs_dir: Path, ratio: float, report: Report = _ignore)
         source.chapters,
         sentences,
         source.run_dir,
-        ratio,
+        ratio if ratio is not None else target_for(digest.padding),
         known_ideas(runs_dir, source.run_dir),
         on_screen,
     )

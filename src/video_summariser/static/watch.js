@@ -1,4 +1,4 @@
-import { VERDICT_LABELS, api, clock, el, followJob, jobProgress, roundedLength } from "/static/ui.js";
+import { api, clock, el, followJob, jobProgress, roundedLength, verdictNodes } from "/static/ui.js";
 
 const videoId = decodeURIComponent(location.pathname.split("/").pop());
 const video = document.getElementById("video");
@@ -329,14 +329,7 @@ function renderNotes() {
   document.getElementById("title").textContent = data.title;
   document.getElementById("summary").textContent = data.summary || "No summary yet.";
   document.getElementById("ideas").replaceChildren(...data.ideas.map(ideaItem));
-  document.getElementById("verdict").replaceChildren(
-    ...(data.verdict
-      ? [
-          el("span", { class: `badge ${data.verdict}` }, VERDICT_LABELS[data.verdict]),
-          el("span", { class: "reason" }, ` ${data.reason}`),
-        ]
-      : []),
-  );
+  document.getElementById("verdict").replaceChildren(...verdictNodes(data));
 }
 
 function startPosition() {

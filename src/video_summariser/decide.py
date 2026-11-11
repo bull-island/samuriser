@@ -101,6 +101,21 @@ author biography, or a link.\
 """
 
 
+# The share of the running time to aim for when nothing is known about the padding.
+DEFAULT_TARGET = 0.3
+# How much of the material that isn't padding to keep. Set from the first real estimates:
+# ordinary videos came out near 20% padding, and cutting those to about 30% worked well.
+KEEP_SHARE_OF_SUBSTANCE = 0.375
+MIN_TARGET = 0.15
+
+
+def target_for(padding: int | None) -> float:
+    """Aim to cut a padded video harder than a dense one."""
+    if padding is None:
+        return DEFAULT_TARGET
+    return max((1 - padding / 100) * KEEP_SHARE_OF_SUBSTANCE, MIN_TARGET)
+
+
 class Section(BaseModel):
     first: int
     last: int

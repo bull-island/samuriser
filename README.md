@@ -5,6 +5,7 @@ A personal tool for getting through videos and articles faster. It summarises th
 ## What it does
 
 - **Is it worth my time?** Compares a video or article's specific ideas with everything you've marked as seen.
+- **How padded is it?** Each item gets a rough estimate of how much teaches nothing, shown as a badge. Padded items are cut harder than dense ones.
 - **Shorten it.** Keeps the useful parts of a video or article at three lengths, and always keeps a short sign-off.
 - **Watch and read.** A local player jumps over cuts, and a reader shows shortened articles and can read them aloud.
 - **Library.** Thumbnails, full-text search, and a history across platforms.

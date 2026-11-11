@@ -23,14 +23,50 @@ export function roundedLength(seconds) {
   return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
 }
 
+// A coarse label, because the estimate isn't precise enough to show as a figure.
+// Each step has a label and a level from 1 to 4 that sets how strong its badge looks.
+function paddingStep(padding) {
+  if (padding >= 65) return [4, "Mostly padding"];
+  if (padding >= 40) return [3, "About half padding"];
+  if (padding >= 20) return [2, "Some padding"];
+  return [1, "Dense"];
+}
+
+export function paddingBadge(item) {
+  if (item.padding === null || item.padding === undefined) return null;
+  const title = `Claude's estimate: about ${item.padding}% teaches nothing`;
+  const [level, label] = paddingStep(item.padding);
+  return el("span", { class: `badge padding-${level}`, title }, label);
+}
+
+// The verdict, how padded it is, and the reason, for the top of an item's own page.
+export function verdictNodes(item) {
+  return [
+    item.verdict
+      ? el("span", { class: `badge ${item.verdict}` }, verdictLabel(item.kind, item.verdict))
+      : null,
+    paddingBadge(item),
+    item.verdict ? el("span", { class: "reason" }, ` ${item.reason}`) : null,
+  ].filter((node) => node !== null);
+}
+
 const JOB_NAMES = { check: "Checking", shorten: "Shortening", watched: "Adding" };
 const JOB_POLL_MS = 2000;
 
-// One line on how a job is getting on, such as "Shortening: deciding what to cut · 3 min so far".
-export function jobProgress(job) {
+// What a job is doing, such as "Shortening: deciding what to cut".
+export function jobStage(job) {
   if (job.stage === "Waiting") return `${JOB_NAMES[job.kind]}: waiting for another job to finish`;
-  const taken = job.seconds < 60 ? `${job.seconds} s` : roundedLength(job.seconds);
-  return `${JOB_NAMES[job.kind]}: ${job.stage.toLowerCase()} · ${taken} so far`;
+  return `${JOB_NAMES[job.kind]}: ${job.stage.toLowerCase()}`;
+}
+
+// The same with how far through it is. The percentage is an estimate from the stages done.
+export function jobProgress(job) {
+  return job.stage === "Waiting" ? jobStage(job) : `${jobStage(job)} · ${job.progress}%`;
+}
+
+export function jobBar(job) {
+  const label = `${job.progress}% done`;
+  return el("progress", { max: "100", value: String(job.progress), "aria-label": label, title: label });
 }
 
 // Keeps `show` up to date with the job working on a link, and reloads the page once

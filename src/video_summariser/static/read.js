@@ -1,4 +1,4 @@
-import { api, el, followJob, jobProgress, roundedLength, verdictLabel } from "/static/ui.js";
+import { api, el, followJob, jobProgress, roundedLength, verdictNodes } from "/static/ui.js";
 
 const articleId = decodeURIComponent(location.pathname.split("/").pop());
 const apiPath = `/api/videos/${encodeURIComponent(articleId)}`;
@@ -368,14 +368,7 @@ function renderNotes() {
   document.getElementById("summary").textContent = data.summary || "No summary yet.";
   document.getElementById("ideas-label").textContent = `Key ideas (${data.ideas.length})`;
   document.getElementById("ideas").replaceChildren(...data.ideas.map(ideaItem));
-  document.getElementById("verdict").replaceChildren(
-    ...(data.verdict
-      ? [
-          el("span", { class: `badge ${data.verdict}` }, verdictLabel(data.kind, data.verdict)),
-          el("span", { class: "reason" }, ` ${data.reason}`),
-        ]
-      : []),
-  );
+  document.getElementById("verdict").replaceChildren(...verdictNodes(data));
   document.getElementById("watched").textContent = data.watched ? "Read ✓" : "Mark as read";
 }
 

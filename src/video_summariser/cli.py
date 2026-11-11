@@ -13,7 +13,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("target", help="video link or path to a local video")
     parser.add_argument(
-        "--ratio", type=float, default=0.3, help="rough share of the runtime to keep (default 0.3)"
+        "--ratio",
+        type=float,
+        help="rough share of the runtime to keep (default: based on how padded the video is)",
     )
     parser.add_argument("--runs-dir", type=Path, default=Path("runs"))
     args = parser.parse_args()

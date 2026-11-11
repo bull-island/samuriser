@@ -66,7 +66,13 @@ button.small { padding: 2px 8px; font-size: 13px; }
 .results { margin: 8px 0 16px; }
 .result { display: flex; flex-direction: column; padding: 10px 0; border-bottom: 1px solid var(--line); text-decoration: none; }
 
-.job { display: flex; justify-content: space-between; gap: 16px; padding: 10px 12px; background: var(--raised); border-radius: 6px; margin-bottom: 6px; }
+.job { display: flex; align-items: center; gap: 12px; padding: 10px 12px; background: var(--raised); border-radius: 6px; margin-bottom: 6px; }
+.job-stage { margin-left: auto; white-space: nowrap; }
+.job-percent { min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+progress { flex: none; width: 120px; height: 6px; border: 0; border-radius: 3px; overflow: hidden; background: var(--line); accent-color: var(--accent); appearance: none; }
+progress::-webkit-progress-bar { background: var(--line); }
+progress::-webkit-progress-value { background: var(--accent); transition: width 0.4s; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .job.failed { border-left: 3px solid var(--stop); }
 .job-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -74,18 +80,43 @@ button.small { padding: 2px 8px; font-size: 13px; }
 .videos { margin-top: 8px; }
 .video { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
 @media (max-width: 560px) { .video { grid-template-columns: minmax(0, 1fr); } }
-.thumb { display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 6px; background: var(--raised); }
+.thumb { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 6px; background: var(--raised); }
+.kind { position: absolute; right: 6px; bottom: 6px; padding: 0 6px; border-radius: 4px; background: rgba(0, 0, 0, 0.8); color: #fff; font-size: 12px; font-weight: 600; line-height: 18px; }
 .thumb img { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .video-title { font-size: 17px; font-weight: 600; text-decoration: none; }
 .video-title:hover { text-decoration: underline; }
 .video-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 6px 0; }
+.video-head { display: flex; align-items: flex-start; gap: 12px; }
+.remove { flex: none; margin-left: auto; padding: 0 8px; border-color: transparent; background: none; color: var(--muted); font-size: 20px; line-height: 24px; }
+.remove:hover { color: var(--text); }
 .reason { color: var(--text); }
 .clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; background: var(--line); font-size: 13px; }
-.badge.skip { background: var(--stop); color: #1a1a19; }
-.badge.parts { background: var(--warn); color: #1a1a19; }
-.badge.watch { background: var(--good); color: #1a1a19; }
+/* Every badge is a tint of one colour with lighter text in the same colour, so they sit
+   together. Colour says what kind of badge it is: blue for your own history, green, amber
+   and red for the verdict, and greys that deepen with the amount of padding. */
+.badge {
+  --hue: 240, 239, 236;
+  --ink: var(--text);
+  --strength: 0.12;
+  display: inline-block;
+  padding: 1px 9px;
+  border-radius: 10px;
+  background: rgba(var(--hue), var(--strength));
+  box-shadow: inset 0 0 0 1px rgba(var(--hue), calc(var(--strength) + 0.14));
+  color: var(--ink);
+  font-size: 13px;
+  white-space: nowrap;
+}
+#verdict .badge + .badge { margin-left: 6px; }
+.badge.seen { --hue: 57, 135, 229; --ink: #a9cbf6; --strength: 0.2; }
+.badge.watch { --hue: 27, 175, 122; --ink: #6fdcb1; --strength: 0.18; }
+.badge.parts { --hue: 201, 133, 0; --ink: #f2bd55; --strength: 0.2; }
+.badge.skip { --hue: 230, 103, 103; --ink: #f5a3a3; --strength: 0.2; }
+.badge.padding-1 { --strength: 0.05; --ink: var(--muted); }
+.badge.padding-2 { --strength: 0.11; }
+.badge.padding-3 { --strength: 0.2; }
+.badge.padding-4 { --strength: 0.32; }
 
 video { display: block; width: 100%; max-height: 72vh; background: #000; border-radius: 8px; }
 

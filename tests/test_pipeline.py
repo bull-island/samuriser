@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import urllib.error
 import urllib.request
@@ -23,6 +24,7 @@ from video_summariser.decide import (
     build_prompt,
     decide,
     save_sections,
+    target_for,
     validate_sections,
     with_sign_off,
 )
@@ -588,6 +590,7 @@ def test_skip_check_compares_against_watched_ideas(
 def test_key_ideas_are_saved_in_time_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     draft = library.DraftDigest(
         summary="s",
+        padding=140,
         ideas=[
             library.DraftIdea(sentence=1, text="later"),
             library.DraftIdea(sentence=0, text="sooner"),
@@ -596,6 +599,61 @@ def test_key_ideas_are_saved_in_time_order(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.setattr(library, "ask_claude", lambda *_: draft)
     digest = library.ensure_digest(tmp_path, "T", [sentence(0, 1, 2), sentence(1, 5, 6)])
     assert [i.text for i in digest.ideas] == ["sooner", "later"]
+    assert digest.padding == 100
+
+
+def test_an_older_summary_gains_a_padding_estimate_without_being_rewritten(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_dir = _library_video(tmp_path, "abc", False, "an idea")
+    asked: list[type] = []
+
+    def fake_ask(_: str, __: str, schema: type) -> library.PaddingEstimate:
+        asked.append(schema)
+        return library.PaddingEstimate(padding=55)
+
+    monkeypatch.setattr(library, "ask_claude", fake_ask)
+    sentences = [sentence(0, 1, 2)]
+
+    first = library.ensure_digest(run_dir, "T", sentences)
+    second = library.ensure_digest(run_dir, "T", sentences)
+
+    assert (first.padding, first.ideas[0].text) == (55, "an idea")
+    assert second == first
+    assert asked == [library.PaddingEstimate]
+
+
+@pytest.mark.parametrize(
+    ("padding", "target"), [(None, 0.3), (20, 0.3), (0, 0.375), (44, 0.21), (70, 0.15), (95, 0.15)]
+)
+def test_padded_items_are_cut_harder_than_dense_ones(padding: int | None, target: float) -> None:
+    assert target_for(padding) == pytest.approx(target)
+
+
+def test_an_article_is_cut_to_the_target_its_padding_suggests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    targets: list[float] = []
+
+    def fake_decide(*args: Any, **__: Any) -> list[Section]:
+        targets.append(args[4])
+        return []
+
+    monkeypatch.setattr(pipeline, "decide", fake_decide)
+    dense = pipeline.Summary(tmp_path, "T", Digest(summary="s", ideas=[], padding=20))
+
+    pipeline.shorten_article(dense, tmp_path)
+    pipeline.shorten_article(dense, tmp_path, ratio=0.25)
+
+    assert targets == [pytest.approx(0.3), 0.25]
+
+
+def test_the_library_card_carries_the_padding_estimate(tmp_path: Path) -> None:
+    run_dir = _library_video(tmp_path, "abc", False, "an idea")
+    digest = Digest(summary="s", ideas=[], padding=72)
+    (run_dir / "digest.json").write_text(digest.model_dump_json())
+    client = TestClient(create_app(tmp_path, start_worker=False))
+    assert client.get("/api/videos").json()["videos"][0]["padding"] == 72
 
 
 def test_search_lists_key_ideas_before_transcript_lines(tmp_path: Path) -> None:
@@ -984,7 +1042,7 @@ def test_lookup_reports_the_job_working_on_a_link(tmp_path: Path) -> None:
             "title": None,
             "stage": "Waiting",
             "error": None,
-            "seconds": 0,
+            "progress": 0,
         },
     }
     assert "page" not in client.get("/api/videos").json()["jobs"][0]
@@ -1056,8 +1114,37 @@ def test_a_running_job_shows_its_title_and_how_long_it_has_taken(
     jobs._run(job)
 
     assert seen[0]["title"] == "Title abc"
-    assert seen[0]["seconds"] >= 0
-    assert job.started is not None
+
+
+def test_progress_follows_the_stages_and_never_claims_to_be_finished(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = [1000.0]
+    monkeypatch.setattr("video_summariser.web.time.monotonic", lambda: clock[0])
+    job = Job("shorten", "https://example.com/article")
+    assert job.progress() == 0
+
+    seen = []
+    for stage in ["Reading the page", "Writing the summary", "Comparing with what you've watched"]:
+        job.enter(stage)
+        seen.append(job.progress())
+        clock[0] += 5
+    during_stage = job.progress()
+    # An article skips the video-only stages, and the bar skips ahead with it.
+    job.enter("Deciding what to cut")
+    at_last_stage = job.progress()
+    clock[0] += 3600
+
+    assert seen == sorted(seen)
+    assert seen[-1] < during_stage < at_last_stage
+    assert job.progress() == 99
+
+
+def test_every_stage_a_job_reports_has_a_place_in_the_progress_plan() -> None:
+    source = Path(pipeline.__file__).read_text()
+    reported = set(re.findall(r'report\("([^"]+)"\)', source))
+    planned = {name for name, _ in pipeline.PLANS["shorten"]}
+    assert reported and reported <= planned
 
 
 def test_a_job_uses_the_page_it_was_given_and_remembers_the_link(
@@ -1093,6 +1180,26 @@ def test_a_page_from_the_browser_is_read_without_downloading_it(
 
     assert article is not None
     assert article.title == "A Long Read"
+
+
+def test_removing_an_item_deletes_everything_stored_for_it(site: tuple[TestClient, Path]) -> None:
+    client, run_dir = site
+
+    assert client.post("/api/videos/abc/remove").json() == {"removed": True}
+
+    assert not run_dir.exists()
+    assert client.get("/api/videos").json()["videos"] == []
+    assert client.post("/api/videos/abc/remove").status_code == 404
+
+
+def test_an_item_cannot_be_removed_while_a_job_is_working_on_it(tmp_path: Path) -> None:
+    run_dir = _library_video(tmp_path, "abc", False, "an idea")
+    save_info(run_dir, url="https://www.youtube.com/watch?v=abc")
+    client = TestClient(create_app(tmp_path, start_worker=False))
+    client.post("/api/jobs", json={"urls": ["https://youtu.be/abc"], "kind": "shorten"})
+
+    assert client.post("/api/videos/abc/remove").status_code == 409
+    assert run_dir.exists()
 
 
 def test_marking_as_watched_is_saved(site: tuple[TestClient, Path]) -> None:
