@@ -1,5 +1,7 @@
 # Samuriser
 
+![A pixel-art samurai slicing videos and documents in half as they fly towards him](docs/samuriser.gif)
+
 Cuts videos and articles down to what matters, like a samurai.
 
 A personal tool for getting through videos and articles faster. It summarises them, cuts the padding, and tells you when something only repeats ideas you've already seen.
