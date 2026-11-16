@@ -2,26 +2,44 @@
 
 ![A pixel-art samurai slicing videos and documents in half as they fly towards him](docs/samuriser.gif)
 
-Cuts videos and articles down to what matters, like a samurai.
+**Watch a one-hour talk in about half the time.** Samuriser cuts the padding out of videos and articles and keeps the rest exactly as it was made: the original footage, in the original order, playing in YouTube's own player. It cuts like a samurai.
 
-A personal tool for getting through videos and articles faster. It summarises them, cuts the padding, and tells you when something only repeats ideas you've already seen.
+Some real results: a 56-minute interview came out at 24 minutes, an 18-minute talk at 9, and a 34-minute talk at 10 minutes, or 5 at the shortest setting.
+
+It also tells you when something only repeats ideas you've already seen, so you can skip it altogether.
+
+## How it works
+
+1. You save a video or article, from the Chrome extension, the local site, or a YouTube playlist.
+2. Claude reads the transcript, writes a summary and key ideas, and decides which parts teach nothing: intros, recaps, repetition, sponsor reads and filler.
+3. The player jumps over those parts as you watch. Nothing is re-encoded, and every cut is listed with its reason, so you can restore any of them or switch back to the full video.
+
+## Before you start
+
+This is a personal project that runs on your own computer, not a hosted service. You need:
+
+- **An Apple Silicon Mac.** That's where it is built and tested. On other systems, YouTube videos that have captions and articles should work, because they don't need speech-to-text on your machine, but that is untested.
+- **Claude.** Either a signed-in [Claude Code](https://claude.com/claude-code) or an `ANTHROPIC_API_KEY`. Each item takes a few requests, which count against your plan or credit.
+- **[uv](https://docs.astral.sh/uv/)**, and **[Node](https://nodejs.org) or [bun](https://bun.sh)**, which yt-dlp needs for YouTube.
+- **`ffmpeg`**, only for videos that have to be downloaded.
+- **Chrome**, for the extension. It is loaded in developer mode and isn't in the Chrome Web Store.
+- Optional: [Kokoro](https://github.com/remsky/Kokoro-FastAPI) on `127.0.0.1:8880` for natural reading voices. Without it, the reader uses the browser's voices.
 
 ## What it does
 
 - **Is it worth my time?** Compares a video or article's specific ideas with everything you've marked as seen.
 - **How padded is it?** Each item gets a rough estimate of how much teaches nothing, shown as a badge. Padded items are cut harder than dense ones.
 - **Shorten it.** Keeps the useful parts of a video or article at three lengths. Every length opens with one line saying what it's about and ends with a short sign-off.
-- **No download for YouTube.** A YouTube video is shortened from its captions alone. It plays shortened in the local player through YouTube's embedded player, or on YouTube through the extension. Videos from other sites are downloaded, because there is nowhere else to play them.
+- **No download for YouTube.** A YouTube video is shortened from its captions and plays shortened in YouTube's own player, on YouTube through the extension or embedded in the local site. If a video has no captions, or YouTube refuses them, only its audio is downloaded, to be transcribed on your Mac. Videos from other sites are downloaded, because there is nowhere else to play them.
 - **Watch and read.** A local player jumps over cuts in videos, and a reader shows shortened articles and can read them aloud.
 - **Library.** Thumbnails, full-text search, and a history across platforms.
 
-## Requirements
+## What it doesn't do
 
-- macOS on Apple Silicon, for `mlx-whisper`
-- [uv](https://docs.astral.sh/uv/) and [bun](https://bun.sh)
-- `ffmpeg`
-- Either a signed-in [Claude Code](https://claude.com/claude-code) or `ANTHROPIC_API_KEY`
-- Optional: [Kokoro](https://github.com/remsky/Kokoro-FastAPI) on `127.0.0.1:8880` for natural reading voices. Without it, the reader uses the browser's voices.
+- **It doesn't block or remove ads.** YouTube videos play in YouTube's own player, ads included.
+- **It doesn't share or re-upload anything.** Videos, transcripts and edits stay in a folder on your computer. The optional phone copy never contains video.
+- **It doesn't track you.** There is no account and no telemetry. See [Privacy](#privacy) for exactly what leaves your machine.
+- **It doesn't get every cut right.** The cuts are a model's judgement. If one looks wrong, restore that section or play the full video.
 
 ## Run it
 
@@ -80,6 +98,17 @@ The `extension/` folder adds Samuriser to Chrome. It needs the local site runnin
 
 To install it, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and pick the `extension` folder. After changing its files, press the reload arrow on its card there.
 
+## Privacy
+
+Everything is stored in `runs/` on your computer. These are the only things that leave it:
+
+- **To the sites you save from:** requests for the page, captions and thumbnail, as any browser would make.
+- **To Anthropic:** the transcript or article text, and for downloaded videos a sample of frames, so Claude can summarise and decide the cuts. Claude runs with no tools, so text inside a transcript can't make it do anything.
+- **To Hugging Face:** a one-time download of the speech model, the first time something is transcribed on your Mac.
+- **To your own storage:** only if you set up the phone copy described above.
+
+The local site listens on `127.0.0.1` only, and accepts changes only from its own pages and the extension, so other websites open in your browser can't add or delete things. The extension can read YouTube pages and the local site, and nothing else unless you use its button or right-click menu on a page.
+
 ## Develop
 
 ```sh
@@ -92,5 +121,7 @@ uv run mypy .
 ## Use and licence
 
 This is a personal tool for getting through things you would otherwise watch or read in full. It is released under the [MIT licence](LICENSE).
+
+Samuriser is not affiliated with or endorsed by YouTube, Google or Anthropic.
 
 It reads videos and pages through [yt-dlp](https://github.com/yt-dlp/yt-dlp), which some sites' terms of service don't allow. You are responsible for how you use it: follow the terms of the sites you use it with, and don't share downloaded videos or copies of other people's work.

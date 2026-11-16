@@ -18,10 +18,12 @@ from urllib.parse import urlparse
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, Response
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import Scope
 
 from samuriser.articles import is_article, load_blocks
@@ -71,6 +73,8 @@ from samuriser.transcribe import Sentence, load_sentences
 
 STATIC_DIR = Path(__file__).parent / "static"
 HOST = "127.0.0.1"
+# The names this site answers to. Another site's page can't use any of them.
+OWN_HOSTS = (HOST, "localhost")
 PORT = 8765
 TIERS = (1, 2, 3)
 MAX_FAILED_JOBS_SHOWN = 5
@@ -498,8 +502,31 @@ def _is_web_link(url: str) -> bool:
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
 
+def _may_make_changes(origin: str | None) -> bool:
+    """Whether a request to change something came from this site or the extension.
+
+    A browser names the page a request came from, so this stops any other website that
+    happens to be open from adding or deleting things. Requests that name no page, such
+    as from a script, are the user's own.
+    """
+    if origin is None:
+        return True
+    return origin.startswith("chrome-extension://") or urlparse(origin).hostname in OWN_HOSTS
+
+
 def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
     app = FastAPI(title="Samuriser")
+
+    @app.middleware("http")
+    async def refuse_changes_from_other_sites(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        if request.method != "GET" and not _may_make_changes(request.headers.get("origin")):
+            return JSONResponse(
+                {"detail": "Changes are only accepted from Samuriser itself."}, status_code=403
+            )
+        return await call_next(request)
+
     publisher = Publisher(runs_dir)
     jobs = JobQueue(runs_dir, on_done=publisher.changed)
     if start_worker:
@@ -640,4 +667,7 @@ def publish_main() -> None:
 def main() -> None:
     load_dotenv()
     print(f"Samuriser is running at http://{HOST}:{PORT}")
-    uvicorn.run(create_app(Path("runs")), host=HOST, port=PORT, log_level="warning")
+    app = create_app(Path("runs"))
+    # Refuse a page that reaches this site under its own name to read the library.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(OWN_HOSTS))
+    uvicorn.run(app, host=HOST, port=PORT, log_level="warning")

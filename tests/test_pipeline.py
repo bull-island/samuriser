@@ -537,7 +537,7 @@ def test_the_quick_transcript_never_replaces_the_accurate_one(
         words = [{"word": "Accurate.", "start": 0.0, "end": 1.0}]
         return {"segments": [{"text": "Rough phrase.", "start": 0.0, "end": 1.0, "words": words}]}
 
-    monkeypatch.setattr("samuriser.transcribe.mlx_whisper.transcribe", fake_whisper)
+    monkeypatch.setattr("mlx_whisper.transcribe", fake_whisper)
     (tmp_path / "audio.wav").touch()
 
     def saved_text() -> list[str]:
@@ -1433,3 +1433,17 @@ def test_a_video_saved_to_the_playlist_is_shortened_once(
     queue_from_playlist("https://www.youtube.com/playlist?list=x", jobs)
     assert [j["url"] for j in jobs.snapshot()] == [first, second]
     assert json.loads((tmp_path / "inbox.json").read_text()) == [first, second]
+
+
+def test_another_website_cannot_change_the_library(site: tuple[TestClient, Path]) -> None:
+    client, run_dir = site
+    remove = f"/api/videos/{run_dir.name}/remove"
+
+    refused = client.post(remove, headers={"Origin": "https://example.com"})
+    assert refused.status_code == 403
+    assert run_dir.exists()
+
+    assert client.get("/api/videos", headers={"Origin": "https://example.com"}).status_code == 200
+    extension = {"Origin": "chrome-extension://abcdefghijklmnop"}
+    assert client.post(remove, headers=extension).status_code == 200
+    assert not run_dir.exists()

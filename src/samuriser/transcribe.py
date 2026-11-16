@@ -5,8 +5,7 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-
-import mlx_whisper
+from typing import Any
 
 MODEL = "mlx-community/whisper-large-v3-turbo"
 # The skip check only reads a video's ideas, so it can trade accuracy for speed.
@@ -56,8 +55,20 @@ def extract_audio(video: Path, wav: Path) -> None:
     )
 
 
+def _whisper() -> Any:
+    """Load the speech model's library, which is only installed on Apple Silicon Macs."""
+    try:
+        import mlx_whisper
+    except ImportError as error:
+        raise RuntimeError(
+            "This needs speech-to-text, which only runs on an Apple Silicon Mac. "
+            "Videos that have captions, and articles, work without it."
+        ) from error
+    return mlx_whisper
+
+
 def _words_from_whisper(wav: Path) -> list[Word]:
-    result = mlx_whisper.transcribe(
+    result = _whisper().transcribe(
         str(wav),
         path_or_hf_repo=MODEL,
         word_timestamps=True,
@@ -74,7 +85,7 @@ def _words_from_whisper(wav: Path) -> list[Word]:
 
 def _phrases_from_whisper(wav: Path) -> list[Word]:
     """Treat each phrase as one timed unit, because timing every word is slow."""
-    result = mlx_whisper.transcribe(
+    result = _whisper().transcribe(
         str(wav),
         path_or_hf_repo=QUICK_MODEL,
         condition_on_previous_text=False,
