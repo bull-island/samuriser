@@ -55,6 +55,14 @@ and make sure a kept sentence that points at the screen still shows what it poin
 
 {SECTION_FORMAT}
 
+Set "opening" to the id of one short sentence near the start where the speaker says what the \
+video is about, such as "Today I'll show you how to promote a release between environments". It \
+is added back automatically so the video doesn't start in the middle of things, so cut the \
+intro in your sections as usual. If the introduction runs long, pick its shortest complete line \
+that makes sense on its own, never a bare greeting, a speaker biography, a sponsor read or a \
+request to subscribe. If no sentence introduces the topic, or the kept material already starts \
+with one, set it to null.
+
 Set "sign_off" to the id of one short sentence at the very end where the speaker says goodbye or \
 wraps up, such as "Thanks for watching, see you in the next one". It is added back automatically \
 so the video doesn't stop dead, so cut the outro in your sections as usual. If the goodbye runs \
@@ -95,6 +103,11 @@ it adds real detail or a reader needs it to follow what comes next.
 
 {SECTION_FORMAT}
 
+Set "opening" to the id of one short sentence near the start that says what the article is \
+about. It is added back automatically so the shortened version doesn't start in the middle of \
+things, so cut the introduction in your sections as usual. If no sentence does that, or the \
+kept material already starts with one, set it to null.
+
 Set "sign_off" to the id of the sentence that best concludes the article. It is added back \
 automatically so the shortened version doesn't stop dead. Never pick a subscription prompt, an \
 author biography, or a link.\
@@ -129,11 +142,12 @@ class CutList(BaseModel):
 
 
 class Decision(CutList):
+    opening: int | None
     sign_off: int
 
 
-def with_sign_off(sections: list[Section], sentence: int) -> list[Section]:
-    """Make one sentence its own core section, so every length ends with a goodbye."""
+def keep_sentence(sections: list[Section], sentence: int, note: str) -> list[Section]:
+    """Make one sentence its own core section, so it plays at every length."""
     result: list[Section] = []
     for section in sections:
         if not section.first <= sentence <= section.last:
@@ -141,7 +155,7 @@ def with_sign_off(sections: list[Section], sentence: int) -> list[Section]:
             continue
         if section.first < sentence:
             result.append(section.model_copy(update={"last": sentence - 1}))
-        result.append(Section(first=sentence, last=sentence, keep=True, note="Sign-off", tier=1))
+        result.append(Section(first=sentence, last=sentence, keep=True, note=note, tier=1))
         if sentence < section.last:
             result.append(section.model_copy(update={"first": sentence + 1}))
     return result
@@ -221,6 +235,11 @@ def decide(
     if not (run_dir / "cuts.json").exists():
         prompt = build_prompt(title, chapters, sentences, target, known, on_screen)
         cuts = ask_claude(system_prompt, prompt, Decision)
-        sign_off = min(max(cuts.sign_off, 0), len(sentences) - 1)
-        save_sections(run_dir, with_sign_off(cuts.sections, sign_off))
+        last = len(sentences) - 1
+        sections = cuts.sections
+        # Every length starts by saying what it's about and ends with a goodbye.
+        if cuts.opening is not None:
+            sections = keep_sentence(sections, min(max(cuts.opening, 0), last), "Opening")
+        sections = keep_sentence(sections, min(max(cuts.sign_off, 0), last), "Sign-off")
+        save_sections(run_dir, sections)
     return load_sections(run_dir, len(sentences))

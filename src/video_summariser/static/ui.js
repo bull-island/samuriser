@@ -10,6 +10,9 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
+// True in the published copy, which can only be read: there is no local site to send changes to.
+export const PUBLISHED = "published" in document.documentElement.dataset;
+
 export function clock(seconds) {
   const whole = Math.max(Math.floor(seconds || 0), 0);
   const hours = Math.floor(whole / 3600);

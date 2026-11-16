@@ -1,4 +1,4 @@
-import { api, clock, el, jobBar, jobStage, paddingBadge, roundedLength, verdictLabel } from "/static/ui.js";
+import { PUBLISHED, api, clock, el, jobBar, jobStage, paddingBadge, roundedLength, verdictLabel } from "/static/ui.js";
 
 const ACTIVE_REFRESH_MS = 2000;
 const IDLE_REFRESH_MS = 10000;
@@ -57,7 +57,7 @@ function card(video) {
         el(
           "button",
           {
-            class: "remove",
+            class: "remove local-only",
             title: "Remove",
             "aria-label": `Remove ${video.title}`,
             onclick: () => remove(video),
@@ -164,7 +164,7 @@ async function refresh() {
   } catch (error) {
     document.getElementById("add-message").textContent = error.message;
   }
-  setTimeout(refresh, delay);
+  if (!PUBLISHED) setTimeout(refresh, delay);
 }
 
 async function addLinks(kind) {

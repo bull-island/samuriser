@@ -6,8 +6,8 @@ from pathlib import Path
 
 import yt_dlp
 
-from video_summariser.articles import Article, read_article, save_article
-from video_summariser.decide import ARTICLE_PROMPT, Section, decide, target_for
+from video_summariser.articles import Article, is_article, read_article, save_article
+from video_summariser.decide import ARTICLE_PROMPT, SYSTEM_PROMPT, Section, decide, target_for
 from video_summariser.fetch import (
     Source,
     fetch_audio,
@@ -41,15 +41,17 @@ _CHECK_PLAN: list[tuple[str, float]] = [
 PLANS: dict[str, list[tuple[str, float]]] = {
     "check": _CHECK_PLAN,
     "watched": _CHECK_PLAN[:-1],
-    "shorten": [
-        *_CHECK_PLAN,
-        ("Downloading the video", 40),
-        ("Transcribing", 80),
-        ("Writing the summary", 2),
-        ("Looking at what's on screen", 25),
-        ("Deciding what to cut", 150),
-    ],
+    "shorten": [*_CHECK_PLAN, ("Deciding what to cut", 150)],
 }
+# Shortening a video that has to be downloaded first, because it can't be played where it is.
+DOWNLOAD_PLAN: list[tuple[str, float]] = [
+    *_CHECK_PLAN,
+    ("Downloading the video", 40),
+    ("Transcribing", 80),
+    ("Writing the summary", 2),
+    ("Looking at what's on screen", 25),
+    ("Deciding what to cut", 150),
+]
 
 
 def _ignore(_: str) -> None:
@@ -107,19 +109,23 @@ def summarise(
         return _summarise_article(article, runs_dir, report)
 
 
-def shorten_article(
+def shorten_text(
     summary: Summary, runs_dir: Path, ratio: float | None = None, report: Report = _ignore
 ) -> None:
-    """Cut an article. Without a `ratio`, the target follows how padded it is."""
+    """Cut an article, or a video from its captions alone, without downloading anything.
+
+    Without a `ratio`, the target follows how padded it is.
+    """
+    article = is_article(summary.run_dir)
     report("Deciding what to cut")
     decide(
         summary.title,
-        [],
+        [] if article else load_info(summary.run_dir).get("chapters", []),
         sentences_for(summary.run_dir) or [],
         summary.run_dir,
         ratio if ratio is not None else target_for(summary.digest.padding),
         known_ideas(runs_dir, summary.run_dir),
-        system_prompt=ARTICLE_PROMPT,
+        system_prompt=ARTICLE_PROMPT if article else SYSTEM_PROMPT,
     )
 
 
@@ -147,6 +153,10 @@ def prepare(
     """
     report("Downloading the video")
     source = get_source(target, runs_dir)
+    if not (source.run_dir / "transcript.json").exists():
+        # Cuts made from captions number their sentences differently from the transcript.
+        for stale in ("cuts.json", "segments.json"):
+            (source.run_dir / stale).unlink(missing_ok=True)
     report("Transcribing")
     sentences = transcribe(source.video, source.run_dir)
     extract_audio(source.video, source.run_dir / "audio.wav")

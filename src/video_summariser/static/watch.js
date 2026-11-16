@@ -1,7 +1,7 @@
-import { api, clock, el, followJob, jobProgress, roundedLength, verdictNodes } from "/static/ui.js";
+import { PUBLISHED, api, clock, el, followJob, jobProgress, roundedLength, verdictNodes } from "/static/ui.js";
 
 const videoId = decodeURIComponent(location.pathname.split("/").pop());
-const video = document.getElementById("video");
+let video = document.getElementById("video");
 const fullBar = document.getElementById("full-bar");
 const shortBar = document.getElementById("short-bar");
 const tip = document.getElementById("tip");
@@ -30,6 +30,60 @@ let mode = "3";
 let ranges = [];
 let shortLength = 0;
 let finished = false;
+
+const YOUTUBE_PLAYING = 1;
+
+function loadYoutubeApi() {
+  return new Promise((resolve, reject) => {
+    window.onYouTubeIframeAPIReady = resolve;
+    const script = el("script", { src: "https://www.youtube.com/iframe_api" });
+    script.onerror = () => reject(new Error("YouTube's player couldn't be loaded."));
+    document.head.append(script);
+  });
+}
+
+// Plays a video that was never downloaded in YouTube's embedded player, behind the few
+// parts of a <video> element this page uses, so the rest of the page treats both alike.
+async function youtubePlayer(start) {
+  const page = new URL(data.url);
+  if (!page.hostname.endsWith("youtube.com")) {
+    throw new Error("This video was downloaded, so it only plays on the Mac that has it.");
+  }
+  await loadYoutubeApi();
+  document.getElementById("video").hidden = true;
+  document.getElementById("youtube").hidden = false;
+  const player = await new Promise((resolve, reject) => {
+    const created = new YT.Player("youtube", {
+      videoId: page.searchParams.get("v"),
+      playerVars: { playsinline: 1, rel: 0, start: Math.floor(start), origin: location.origin },
+      events: {
+        onReady: () => resolve(created),
+        onError: (event) =>
+          reject(
+            new Error(
+              `YouTube won't play this video here (error ${event.data}). On YouTube, the Summariser extension jumps over the cuts.`,
+            ),
+          ),
+      },
+    });
+  });
+  return {
+    seeking: false,
+    get currentTime() {
+      return player.getCurrentTime() || 0;
+    },
+    set currentTime(time) {
+      player.seekTo(time, true);
+    },
+    get paused() {
+      return player.getPlayerState() !== YOUTUBE_PLAYING;
+    },
+    set playbackRate(speed) {
+      player.setPlaybackRate(speed);
+    },
+    pause: () => player.pauseVideo(),
+  };
+}
 
 function readStored(key) {
   try {
@@ -179,7 +233,7 @@ async function setWatched(watched) {
 }
 
 function finishVideo() {
-  if (finished) return;
+  if (finished || PUBLISHED) return;
   finished = true;
   setWatched(true);
 }
@@ -260,8 +314,18 @@ function setSpeed(speed) {
 
 async function changeSection(section, keep) {
   data = await api(`/api/videos/${encodeURIComponent(videoId)}/sections/${section.index}`, { keep });
-  chooseLength(mode);
+  if (data.playable) chooseLength(mode);
   renderSections();
+}
+
+function jumpTo(section) {
+  if (document.getElementById("player").hidden) {
+    // Without a player here, the only place to see this moment is its own site.
+    window.open(`${data.url}&t=${Math.floor(section.start)}s`, "_blank", "noopener");
+    return;
+  }
+  if (!section.keep && mode !== FULL) chooseLength(FULL);
+  seek(section.start);
 }
 
 function sectionRow(section) {
@@ -278,10 +342,7 @@ function sectionRow(section) {
       {
         class: "section-jump",
         title: section.opening,
-        onclick: () => {
-          if (!section.keep && mode !== FULL) chooseLength(FULL);
-          seek(section.start);
-        },
+        onclick: () => jumpTo(section),
       },
       el("span", { class: "muted" }, clock(section.start)),
       el("span", {}, section.note),
@@ -289,7 +350,7 @@ function sectionRow(section) {
     el("span", { class: "tag" }, label),
     el(
       "button",
-      { class: "small", onclick: () => changeSection(section, !section.keep) },
+      { class: "small local-only", onclick: () => changeSection(section, !section.keep) },
       section.keep ? "Cut" : "Restore",
     ),
   );
@@ -328,6 +389,7 @@ function renderNotes() {
   document.title = data.title;
   document.getElementById("title").textContent = data.title;
   document.getElementById("summary").textContent = data.summary || "No summary yet.";
+  document.getElementById("ideas-label").textContent = `Key ideas (${data.ideas.length})`;
   document.getElementById("ideas").replaceChildren(...data.ideas.map(ideaItem));
   document.getElementById("verdict").replaceChildren(...verdictNodes(data));
 }
@@ -338,34 +400,57 @@ function startPosition() {
   return Number(readStored("position")) || ranges[0][0];
 }
 
-function showPlayer() {
-  document.getElementById("player").hidden = false;
-  document.getElementById("sections-column").hidden = false;
-  video.src = `/media/${encodeURIComponent(videoId)}`;
+async function showPlayer() {
   const savedLength = readStored("length");
   chooseLength(savedLength && rangesFor(savedLength)?.length ? savedLength : "3");
+  const start = startPosition();
+  if (!isInRanges(start) && new URLSearchParams(location.search).has("t")) chooseLength(FULL);
+  document.getElementById("player").hidden = false;
+  document.getElementById("sections-column").hidden = false;
+  if (data.has_video && !PUBLISHED) {
+    video.src = `/media/${encodeURIComponent(videoId)}`;
+    video.addEventListener(
+      "loadedmetadata",
+      () => {
+        seek(start);
+        drawBars();
+      },
+      { once: true },
+    );
+  } else {
+    try {
+      video = await youtubePlayer(start);
+    } catch (error) {
+      showPlaysElsewhere(error.message);
+      return;
+    }
+  }
   setSpeed(Number(readStored("speed")) || 1);
   renderSections();
   renderWatchedButton();
   attachBar(fullBar);
   attachBar(shortBar);
 
-  video.addEventListener(
-    "loadedmetadata",
-    () => {
-      const start = startPosition();
-      if (!isInRanges(start) && new URLSearchParams(location.search).has("t")) chooseLength(FULL);
-      seek(start);
-      drawBars();
-    },
-    { once: true },
-  );
   document.getElementById("watched").addEventListener("click", () => setWatched(!data.watched));
   setInterval(jumpOverCuts, JUMP_CHECK_MS);
   setInterval(drawBars, BAR_REFRESH_MS);
   setInterval(() => {
     if (!video.paused) store("position", video.currentTime);
   }, SAVE_POSITION_MS);
+}
+
+function showPlaysElsewhere(problem) {
+  document.getElementById("player").hidden = true;
+  document.getElementById("not-ready").hidden = false;
+  document.getElementById("shorten").hidden = true;
+  document.getElementById("sections-column").hidden = false;
+  const kept = data.tiers["3"].reduce((total, [start, end]) => total + (end - start), 0);
+  document.getElementById("not-ready-message").replaceChildren(
+    `Shortened from ${roundedLength(data.duration)} to ${roundedLength(kept)}. `,
+    `${problem} `,
+    el("a", { href: data.url, target: "_blank", rel: "noopener" }, "Open the original"),
+  );
+  renderSections();
 }
 
 function showNotReady() {
@@ -375,6 +460,10 @@ function showNotReady() {
   if (!data.url) {
     message.textContent = "This video is still being processed.";
     button.hidden = true;
+    return;
+  }
+  if (PUBLISHED) {
+    message.textContent = "This video hasn't been shortened yet. Shorten it on your Mac to watch it here.";
     return;
   }
   const show = (job) => {
@@ -396,7 +485,7 @@ function showNotReady() {
 async function load() {
   data = await api(`/api/videos/${encodeURIComponent(videoId)}`);
   renderNotes();
-  if (data.playable) showPlayer();
+  if (data.playable) await showPlayer();
   else showNotReady();
 }
 

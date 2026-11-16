@@ -1,4 +1,4 @@
-import { api, el, followJob, jobProgress, roundedLength, verdictNodes } from "/static/ui.js";
+import { PUBLISHED, api, el, followJob, jobProgress, roundedLength, verdictNodes } from "/static/ui.js";
 
 const articleId = decodeURIComponent(location.pathname.split("/").pop());
 const apiPath = `/api/videos/${encodeURIComponent(articleId)}`;
@@ -387,6 +387,7 @@ function showNotReady() {
   const message = document.getElementById("not-ready-message");
   const button = document.getElementById("shorten");
   document.getElementById("not-ready").hidden = false;
+  if (PUBLISHED) return;
   const show = (job) => {
     const running = job !== null && job.error === null;
     button.hidden = running;
@@ -403,9 +404,26 @@ function showNotReady() {
   follow();
 }
 
+// A published copy leaves out an article's text unless its owner chose to include it.
+function showSummaryOnly() {
+  document.getElementById("lengths").parentElement.hidden = true;
+  document.getElementById("article").replaceChildren(
+    el(
+      "p",
+      { class: "muted" },
+      "This copy has the summary and key ideas only. ",
+      el("a", { href: data.url, target: "_blank", rel: "noopener" }, "Read the original"),
+    ),
+  );
+}
+
 async function load() {
   data = await api(apiPath);
   renderNotes();
+  if (PUBLISHED && !data.blocks.length) {
+    showSummaryOnly();
+    return;
+  }
   const stored = readStored(LENGTH_KEY);
   if (!data.shortened) showNotReady();
   chooseLength(data.shortened ? stored || "3" : FULL);

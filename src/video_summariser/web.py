@@ -2,11 +2,14 @@
 
 import json
 import math
+import os
 import queue
 import re
 import shutil
+import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +17,7 @@ from typing import Any, Literal
 from urllib.parse import urlparse
 
 import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -24,9 +28,11 @@ from video_summariser.articles import is_article, load_blocks
 from video_summariser.decide import Section, load_sections, save_sections, timestamp
 from video_summariser.fetch import (
     THUMBNAIL_FILE,
+    YOUTUBE_HOSTS,
     add_link,
     canonical_url,
     load_info,
+    playlist_links,
     set_watched,
 )
 from video_summariser.library import (
@@ -37,8 +43,29 @@ from video_summariser.library import (
     sentences_for,
     video_dirs,
 )
-from video_summariser.pipeline import PLANS, check, mark_watched, prepare, shorten_article
-from video_summariser.render import build_chapters, load_energy, probe_video, tier_segments
+from video_summariser.pipeline import (
+    DOWNLOAD_PLAN,
+    PLANS,
+    check,
+    mark_watched,
+    prepare,
+    shorten_text,
+)
+from video_summariser.publish import (
+    STATE_FILE,
+    Settings,
+    load_settings,
+    site_files,
+    upload,
+    without_article_text,
+)
+from video_summariser.render import (
+    build_chapters,
+    load_energy,
+    probe_video,
+    tier_segments,
+    tier_spans,
+)
 from video_summariser.speech import is_voice_name, list_voices, write_speech
 from video_summariser.transcribe import Sentence, load_sentences
 
@@ -49,6 +76,9 @@ TIERS = (1, 2, 3)
 MAX_FAILED_JOBS_SHOWN = 5
 # Jobs still to do, kept on disk so that restarting the site doesn't lose them.
 JOBS_FILE = "jobs.json"
+# Links already taken from the playlist, so each one is only shortened once.
+INBOX_FILE = "inbox.json"
+INBOX_CHECK_SECONDS = 300
 # Without this, browsers keep reusing old copies of the site's files for hours after an update.
 ALWAYS_CHECK_FOR_UPDATES = {"Cache-Control": "no-cache"}
 
@@ -75,10 +105,14 @@ class Job:
     # Where the job is in its kind's plan, and when it got there.
     step: int = -1
     stage_started: float = 0.0
+    downloads: bool = False
+
+    def plan(self) -> list[tuple[str, float]]:
+        return DOWNLOAD_PLAN if self.downloads else PLANS[self.kind]
 
     def enter(self, stage: str) -> None:
         """Move on to a stage, skipping any earlier ones that didn't apply."""
-        plan = PLANS[self.kind]
+        plan = self.plan()
         ahead = [i for i, (name, _) in enumerate(plan) if name == stage and i > self.step]
         if ahead:
             self.step = ahead[0]
@@ -90,7 +124,7 @@ class Job:
         with time but never quite completes it."""
         if self.step < 0:
             return 0
-        plan = PLANS[self.kind]
+        plan = self.plan()
         typical = plan[self.step][1]
         finished = sum(seconds for _, seconds in plan[: self.step])
         elapsed = time.monotonic() - self.stage_started
@@ -115,8 +149,9 @@ class Job:
 class JobQueue:
     """Runs one job at a time, because transcribing and downloading are heavy."""
 
-    def __init__(self, runs_dir: Path) -> None:
+    def __init__(self, runs_dir: Path, on_done: Callable[[], None] = lambda: None) -> None:
         self.runs_dir = runs_dir
+        self.on_done = on_done
         self._pending: queue.Queue[Job] = queue.Queue()
         self._jobs: list[Job] = []
         self._lock = threading.Lock()
@@ -169,10 +204,14 @@ class JobQueue:
         if job.kind != "shorten":
             return
         if is_article(summary.run_dir):
-            shorten_article(summary, self.runs_dir, report=job.enter)
+            shorten_text(summary, self.runs_dir, report=job.enter)
+            return
+        if _plays_in_place(summary.run_dir):
+            shorten_text(summary, self.runs_dir, report=job.enter)
         else:
+            job.downloads = True
             prepare(job.url, self.runs_dir, report=job.enter)
-            player_ranges(summary.run_dir)
+        player_ranges(summary.run_dir)
 
     def run_forever(self) -> None:
         while True:
@@ -184,8 +223,37 @@ class JobQueue:
             else:
                 with self._lock:
                     self._jobs.remove(job)
+                self.on_done()
             with self._lock:
                 self._save()
+
+
+def queue_from_playlist(playlist: str, jobs: JobQueue) -> None:
+    """Shorten each video saved to the playlist, the first time it's seen there."""
+    seen_file = jobs.runs_dir / INBOX_FILE
+    seen = set(json.loads(seen_file.read_text())) if seen_file.exists() else set()
+    new = [link for link in playlist_links(playlist) if link not in seen]
+    for link in new:
+        jobs.add(Job("shorten", link))
+    if new:
+        seen_file.write_text(json.dumps(sorted(seen | set(new)), indent=1))
+
+
+def watch_playlist(playlist: str, jobs: JobQueue) -> None:
+    """Keep taking in videos saved to a playlist, such as from the YouTube app on a phone."""
+    while True:
+        try:
+            queue_from_playlist(playlist, jobs)
+        except Exception as error:  # noqa: BLE001 - YouTube being unreachable is routine
+            print(f"Couldn't read the playlist: {error}")
+        time.sleep(INBOX_CHECK_SECONDS)
+
+
+def _plays_in_place(run_dir: Path) -> bool:
+    """Whether the browser extension can play the shortened version on the video's own page,
+    which makes downloading it unnecessary."""
+    url = load_info(run_dir).get("url") or ""
+    return urlparse(url).hostname in YOUTUBE_HOSTS and not (run_dir / "source.mp4").exists()
 
 
 def player_ranges(run_dir: Path) -> Ranges:
@@ -194,20 +262,23 @@ def player_ranges(run_dir: Path) -> Ranges:
     if cache.exists():
         cached: Ranges = json.loads(cache.read_text())
         return cached
-    sentences = load_sentences(run_dir / "transcript.json")
+    sentences = sentences_for(run_dir) or []
     sections = load_sections(run_dir, len(sentences))
-    fps = probe_video(run_dir / "source.mp4").fps
-    energy = load_energy(run_dir / "audio.wav")
-    ranges = {
-        str(tier): [[s.start, s.end] for s in tier_segments(sentences, sections, energy, fps, tier)]
-        for tier in TIERS
-    }
+    video = run_dir / "source.mp4"
+    if video.exists():
+        fps = probe_video(video).fps
+        energy = load_energy(run_dir / "audio.wav")
+        segments = {t: tier_segments(sentences, sections, energy, fps, t) for t in TIERS}
+    else:
+        segments = {t: tier_spans(sentences, sections, t) for t in TIERS}
+    ranges = {str(t): [[s.start, s.end] for s in segments[t]] for t in TIERS}
     cache.write_text(json.dumps(ranges))
     return ranges
 
 
 def _playable(run_dir: Path) -> bool:
-    return (run_dir / "source.mp4").exists() and (run_dir / "cuts.json").exists()
+    """Whether a video has been shortened, so there are cuts to jump over."""
+    return (run_dir / "cuts.json").exists() and not is_article(run_dir)
 
 
 def _duration(run_dir: Path, info: dict[str, Any]) -> float | None:
@@ -302,6 +373,12 @@ def _card(run_dir: Path) -> dict[str, Any]:
     }
 
 
+def _cards(runs_dir: Path) -> list[dict[str, Any]]:
+    """Every item's card, most recently watched or added first."""
+    cards = (_card(d) for d in video_dirs(runs_dir))
+    return sorted(cards, key=lambda c: c["last_activity"], reverse=True)
+
+
 def _readable_note(note: str, sentences: list[Sentence]) -> str:
     """Swap the sentence numbers in a note for times a viewer can use."""
 
@@ -314,7 +391,7 @@ def _readable_note(note: str, sentences: list[Sentence]) -> str:
 
 def _edit_details(run_dir: Path, duration: float) -> dict[str, Any]:
     info = load_info(run_dir)
-    sentences = load_sentences(run_dir / "transcript.json")
+    sentences = sentences_for(run_dir) or []
     sections = load_sections(run_dir, len(sentences))
     chapters = build_chapters(info["chapters"], sentences, sections, duration)
     return {
@@ -359,6 +436,40 @@ def _detail(run_dir: Path, runs_dir: Path) -> dict[str, Any]:
     )
 
 
+def publish_library(runs_dir: Path, settings: Settings) -> int:
+    """Bring the published copy up to date. Returns how many files changed."""
+    dirs = video_dirs(runs_dir)
+    thumbnails = {d.name: d / THUMBNAIL_FILE for d in dirs if (d / THUMBNAIL_FILE).exists()}
+    details = [_detail(d, runs_dir) for d in dirs]
+    if not settings.article_text:
+        details = [without_article_text(detail) for detail in details]
+    files = site_files(_cards(runs_dir), details, thumbnails)
+    return upload(files, settings, runs_dir / STATE_FILE)
+
+
+class Publisher:
+    """Republishes the library after each change, when publishing has been set up."""
+
+    def __init__(self, runs_dir: Path) -> None:
+        self.runs_dir = runs_dir
+        self.settings = load_settings()
+        self._changed = threading.Event()
+
+    def changed(self) -> None:
+        self._changed.set()
+
+    def run_forever(self) -> None:
+        if self.settings is None:
+            return
+        while True:
+            self._changed.wait()
+            self._changed.clear()
+            try:
+                publish_library(self.runs_dir, self.settings)
+            except Exception as error:  # noqa: BLE001 - the local site works without it
+                print(f"Publishing failed: {error}")
+
+
 def _find_by_url(runs_dir: Path, url: str) -> Path | None:
     target = canonical_url(url)
     for run_dir in video_dirs(runs_dir):
@@ -389,9 +500,16 @@ def _is_web_link(url: str) -> bool:
 
 def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
     app = FastAPI(title="Video Summariser")
-    jobs = JobQueue(runs_dir)
+    publisher = Publisher(runs_dir)
+    jobs = JobQueue(runs_dir, on_done=publisher.changed)
     if start_worker:
         threading.Thread(target=jobs.run_forever, daemon=True).start()
+        threading.Thread(target=publisher.run_forever, daemon=True).start()
+        # Catch up on anything that changed while the site wasn't running.
+        publisher.changed()
+        playlist = os.environ.get("SUMMARISER_INBOX_PLAYLIST")
+        if playlist:
+            threading.Thread(target=watch_playlist, args=(playlist, jobs), daemon=True).start()
 
     def run_dir_for(video_id: str) -> Path:
         run_dir = runs_dir / video_id
@@ -442,12 +560,7 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
 
     @app.get("/api/videos")
     def list_videos() -> dict[str, Any]:
-        cards = sorted(
-            (_card(d) for d in video_dirs(runs_dir)),
-            key=lambda c: c["last_activity"],
-            reverse=True,
-        )
-        return {"jobs": jobs.snapshot(), "videos": cards}
+        return {"jobs": jobs.snapshot(), "videos": _cards(runs_dir)}
 
     @app.post("/api/jobs")
     def add_jobs(request: JobRequest) -> dict[str, int]:
@@ -482,11 +595,13 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
         sections[index] = sections[index].model_copy(update={"keep": change.keep, "tier": 1})
         save_sections(run_dir, sections)
         (run_dir / "segments.json").unlink(missing_ok=True)
+        publisher.changed()
         return _detail(run_dir, runs_dir)
 
     @app.post("/api/videos/{video_id}/watched")
     def change_watched(video_id: str, change: WatchedChange) -> dict[str, bool]:
         set_watched(run_dir_for(video_id), change.watched)
+        publisher.changed()
         return {"watched": change.watched}
 
     @app.post("/api/videos/{video_id}/remove")
@@ -502,6 +617,7 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
                     detail="It's still being worked on. Try again when that finishes.",
                 )
         shutil.rmtree(run_dir)
+        publisher.changed()
         return {"removed": True}
 
     @app.get("/api/search")
@@ -512,6 +628,16 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
     return app
 
 
+def publish_main() -> None:
+    load_dotenv()
+    settings = load_settings()
+    if settings is None:
+        sys.exit('Publishing isn\'t set up. See "Read it on your phone" in the README.')
+    changed = publish_library(Path("runs"), settings)
+    print(f"Published. {changed} files changed.")
+
+
 def main() -> None:
+    load_dotenv()
     print(f"Video Summariser is running at http://{HOST}:{PORT}")
     uvicorn.run(create_app(Path("runs")), host=HOST, port=PORT, log_level="warning")

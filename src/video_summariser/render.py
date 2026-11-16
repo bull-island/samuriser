@@ -139,6 +139,10 @@ def plan_segments(
     return segments
 
 
+def _at_tier(sections: list[Section], tier: int) -> list[Section]:
+    return [s.model_copy(update={"keep": s.keep and s.tier <= tier}) for s in sections]
+
+
 def tier_segments(
     sentences: list[Sentence],
     sections: list[Section],
@@ -147,8 +151,13 @@ def tier_segments(
     tier: int,
 ) -> list[Segment]:
     """Plan one length setting, using only kept sections at or below this tier."""
-    included = [s.model_copy(update={"keep": s.keep and s.tier <= tier}) for s in sections]
-    return plan_segments(group_kept(sentences, included), energy, fps)
+    return plan_segments(group_kept(sentences, _at_tier(sections, tier)), energy, fps)
+
+
+def tier_spans(sentences: list[Sentence], sections: list[Section], tier: int) -> list[Segment]:
+    """Plan one length setting from sentence times alone, for a video that wasn't downloaded."""
+    groups = group_kept(sentences, _at_tier(sections, tier))
+    return [Segment(first.start, last.end) for first, last in groups]
 
 
 def build_filter_graph(segments: list[Segment], fps: Fraction) -> str:

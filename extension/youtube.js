@@ -125,7 +125,8 @@ function playbackControls(item) {
         "span",
         { class: "vs-error vs-wide" },
         "YouTube couldn't jump over the cuts smoothly, so shortened playback is off for this video. ",
-        itemLink(item, "Play the shortened version in Summariser"),
+        // Only a downloaded video has somewhere else to play.
+        item.has_video ? itemLink(item, "Play the shortened version in Summariser") : null,
       ),
     ];
   }

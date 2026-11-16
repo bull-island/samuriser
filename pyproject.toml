@@ -3,21 +3,26 @@ name = "video-summariser"
 version = "0.1.0"
 description = "Shorten long videos by cutting padding and repetition while keeping the original footage."
 requires-python = ">=3.11,<3.14"
+license = "MIT"
+license-files = ["LICENSE"]
 dependencies = [
     "anthropic>=2.6.0",
+    "boto3>=1.44.3",
     "fastapi>=0.162.2",
     "mlx-whisper>=0.4.3",
     "numpy>=2.4.6",
     "pillow>=13.0.0",
     "pydantic>=2.14.3",
+    "python-dotenv>=1.2.4",
     "trafilatura>=2.3.1",
     "uvicorn>=0.54.0",
-    "yt-dlp[default]>=2026.10.26",
+    "yt-dlp[curl-cffi,default]>=2026.10.26",
 ]
 
 [project.scripts]
 shorten = "video_summariser.cli:main"
 summariser = "video_summariser.web:main"
+publish = "video_summariser.web:publish_main"
 
 [build-system]
 requires = ["hatchling"]
@@ -34,7 +39,7 @@ strict = true
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["mlx_whisper", "yt_dlp"]
+module = ["boto3", "mlx_whisper", "yt_dlp"]
 ignore_missing_imports = true
 
 [dependency-groups]

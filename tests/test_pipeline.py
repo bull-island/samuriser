@@ -3,6 +3,7 @@ import re
 import subprocess
 import urllib.error
 import urllib.request
+from dataclasses import replace
 from fractions import Fraction
 from io import BytesIO
 from itertools import pairwise
@@ -23,14 +24,15 @@ from video_summariser.decide import (
     Section,
     build_prompt,
     decide,
+    keep_sentence,
     save_sections,
     target_for,
     validate_sections,
-    with_sign_off,
 )
-from video_summariser.fetch import canonical_url, load_info, preview, save_info
+from video_summariser.fetch import Source, canonical_url, load_info, preview, save_info
 from video_summariser.library import Check, Digest, Idea, check_video, known_ideas, search
 from video_summariser.llm import ask_claude
+from video_summariser.publish import Settings, SiteFile, site_files, upload
 from video_summariser.render import (
     Chapter,
     Segment,
@@ -58,7 +60,13 @@ from video_summariser.transcribe import (
     transcribe,
     transcribe_quickly,
 )
-from video_summariser.web import Job, JobQueue, create_app
+from video_summariser.web import (
+    Job,
+    JobQueue,
+    create_app,
+    publish_library,
+    queue_from_playlist,
+)
 
 FPS = Fraction(30)
 
@@ -98,7 +106,7 @@ def test_only_the_sign_off_line_survives_a_long_outro() -> None:
     kept = Section(first=0, last=4, keep=True, note="core", tier=2)
     outro = Section(first=5, last=9, keep=False, note="plug and thanks", tier=3)
 
-    sections = with_sign_off([kept, outro], 7)
+    sections = keep_sentence([kept, outro], 7, "Sign-off")
 
     assert [(s.first, s.last, s.keep, s.tier) for s in sections] == [
         (0, 4, True, 2),
@@ -111,8 +119,8 @@ def test_only_the_sign_off_line_survives_a_long_outro() -> None:
 
 def test_a_sign_off_at_the_edge_of_a_section_leaves_nothing_empty() -> None:
     outro = Section(first=0, last=1, keep=False, note="thanks", tier=3)
-    assert [(s.first, s.last) for s in with_sign_off([outro], 0)] == [(0, 0), (1, 1)]
-    assert [(s.first, s.last) for s in with_sign_off([outro], 1)] == [(0, 0), (1, 1)]
+    assert [(s.first, s.last) for s in keep_sentence([outro], 0, "x")] == [(0, 0), (1, 1)]
+    assert [(s.first, s.last) for s in keep_sentence([outro], 1, "x")] == [(0, 0), (1, 1)]
 
 
 def test_a_new_edit_ends_with_a_sign_off_even_if_the_chosen_line_is_invalid(
@@ -123,6 +131,7 @@ def test_a_new_edit_ends_with_a_sign_off_even_if_the_chosen_line_is_invalid(
             Section(first=0, last=0, keep=True, note="core"),
             Section(first=1, last=2, keep=False, note="outro", tier=3),
         ],
+        opening=None,
         sign_off=99,
     )
     monkeypatch.setattr("video_summariser.decide.ask_claude", lambda *_: answer)
@@ -131,6 +140,32 @@ def test_a_new_edit_ends_with_a_sign_off_even_if_the_chosen_line_is_invalid(
     sections = decide("T", [], sentences, tmp_path, 0.3)
 
     assert (sections[-1].first, sections[-1].keep, sections[-1].tier) == (2, True, 1)
+
+
+def test_a_new_edit_opens_with_one_line_of_a_long_intro(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    answer = Decision(
+        sections=[
+            Section(first=0, last=2, keep=False, note="intro", tier=3),
+            Section(first=3, last=3, keep=True, note="core", tier=2),
+            Section(first=4, last=4, keep=False, note="outro", tier=3),
+        ],
+        opening=1,
+        sign_off=4,
+    )
+    monkeypatch.setattr("video_summariser.decide.ask_claude", lambda *_: answer)
+    sentences = [sentence(i, i * 2, i * 2 + 1) for i in range(5)]
+
+    sections = decide("T", [], sentences, tmp_path, 0.3)
+
+    assert [(s.first, s.last, s.keep, s.tier, s.note) for s in sections] == [
+        (0, 0, False, 3, "intro"),
+        (1, 1, True, 1, "Opening"),
+        (2, 2, False, 3, "intro"),
+        (3, 3, True, 2, "core"),
+        (4, 4, True, 1, "Sign-off"),
+    ]
 
 
 def test_prompt_numbers_every_sentence() -> None:
@@ -642,8 +677,8 @@ def test_an_article_is_cut_to_the_target_its_padding_suggests(
     monkeypatch.setattr(pipeline, "decide", fake_decide)
     dense = pipeline.Summary(tmp_path, "T", Digest(summary="s", ideas=[], padding=20))
 
-    pipeline.shorten_article(dense, tmp_path)
-    pipeline.shorten_article(dense, tmp_path, ratio=0.25)
+    pipeline.shorten_text(dense, tmp_path)
+    pipeline.shorten_text(dense, tmp_path, ratio=0.25)
 
     assert targets == [pytest.approx(0.3), 0.25]
 
@@ -1143,7 +1178,7 @@ def test_progress_follows_the_stages_and_never_claims_to_be_finished(
 def test_every_stage_a_job_reports_has_a_place_in_the_progress_plan() -> None:
     source = Path(pipeline.__file__).read_text()
     reported = set(re.findall(r'report\("([^"]+)"\)', source))
-    planned = {name for name, _ in pipeline.PLANS["shorten"]}
+    planned = {name for name, _ in pipeline.DOWNLOAD_PLAN}
     assert reported and reported <= planned
 
 
@@ -1211,3 +1246,194 @@ def test_marking_as_watched_is_saved(site: tuple[TestClient, Path]) -> None:
 
     client.post("/api/videos/abc/watched", json={"watched": False})
     assert client.get("/api/videos/abc").json()["watched_at"] is None
+
+
+QUICK_SENTENCES = [
+    {"id": 0, "start": 0.0, "end": 4.0, "text": "first part."},
+    {"id": 1, "start": 4.0, "end": 9.0, "text": "padding part."},
+    {"id": 2, "start": 9.0, "end": 15.0, "text": "last part."},
+]
+
+
+def _captioned_video(runs: Path, url: str) -> pipeline.Summary:
+    run_dir = _library_video(runs, "abc", False, "an idea")
+    save_info(run_dir, url=url, duration=15)
+    (run_dir / "quick_transcript.json").write_text(json.dumps(QUICK_SENTENCES))
+    return pipeline.Summary(run_dir, "Title abc", Digest(summary="s", ideas=[], padding=20))
+
+
+def _keep_first_and_last(*args: Any, **__: Any) -> list[Section]:
+    sections = [
+        Section(first=0, last=0, keep=True, note="first", tier=1),
+        Section(first=1, last=1, keep=False, note="padding", tier=3),
+        Section(first=2, last=2, keep=True, note="last", tier=2),
+    ]
+    save_sections(args[3], sections)
+    return sections
+
+
+def test_a_youtube_video_is_shortened_from_its_text_without_being_downloaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summary = _captioned_video(tmp_path, "https://www.youtube.com/watch?v=abc")
+
+    def must_not_download(*_: Any, **__: Any) -> None:
+        raise AssertionError("The video should not be downloaded")
+
+    monkeypatch.setattr("video_summariser.web.check", lambda *_: summary)
+    monkeypatch.setattr("video_summariser.web.prepare", must_not_download)
+    monkeypatch.setattr(pipeline, "decide", _keep_first_and_last)
+
+    JobQueue(tmp_path)._run(Job("shorten", "https://youtu.be/abc"))
+
+    client = TestClient(create_app(tmp_path, start_worker=False))
+    detail = client.get("/api/videos/abc").json()
+    assert detail["playable"] is True
+    assert detail["has_video"] is False
+    assert detail["tiers"]["1"] == [[0.0, 4.0]]
+    assert detail["tiers"]["3"] == [[0.0, 4.0], [9.0, 15.0]]
+    assert detail["short_duration"] == 10.0
+    assert [s["keep"] for s in detail["sections"]] == [True, False, True]
+
+
+def test_a_video_that_cannot_play_in_place_is_downloaded_to_shorten_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summary = _captioned_video(tmp_path, "https://vimeo.com/abc")
+    job = Job("shorten", "https://vimeo.com/abc")
+    downloaded: list[str] = []
+
+    monkeypatch.setattr("video_summariser.web.check", lambda *_: summary)
+    monkeypatch.setattr(
+        "video_summariser.web.prepare", lambda url, *_, **__: downloaded.append(url)
+    )
+    monkeypatch.setattr("video_summariser.web.player_ranges", lambda _: {})
+
+    JobQueue(tmp_path)._run(job)
+
+    assert downloaded == ["https://vimeo.com/abc"]
+    assert job.plan() == pipeline.DOWNLOAD_PLAN
+
+
+def test_downloading_a_video_discards_cuts_made_from_its_captions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    summary = _captioned_video(tmp_path, "https://www.youtube.com/watch?v=abc")
+    run_dir = summary.run_dir
+    _keep_first_and_last(None, None, None, run_dir)
+    (run_dir / "segments.json").write_text("{}")
+    source = Source(run_dir, run_dir / "source.mp4", "Title abc", [])
+    cuts_when_deciding: list[bool] = []
+
+    def fake_decide(*_: Any, **__: Any) -> list[Section]:
+        cuts_when_deciding.append((run_dir / "cuts.json").exists())
+        return []
+
+    monkeypatch.setattr(pipeline, "get_source", lambda *_: source)
+    monkeypatch.setattr(pipeline, "transcribe", lambda *_: [])
+    monkeypatch.setattr(pipeline, "extract_audio", lambda *_: None)
+    monkeypatch.setattr(pipeline, "ensure_digest", lambda *_: summary.digest)
+    monkeypatch.setattr(pipeline, "describe_visuals", lambda *_: [])
+    monkeypatch.setattr(pipeline, "decide", fake_decide)
+
+    pipeline.prepare("https://youtu.be/abc", tmp_path)
+
+    assert cuts_when_deciding == [False]
+    assert not (run_dir / "segments.json").exists()
+
+
+class FakeStorage:
+    def __init__(self) -> None:
+        self.objects: dict[str, dict[str, Any]] = {}
+        self.calls: list[tuple[str, str]] = []
+
+    def put_object(self, Bucket: str, Key: str, **details: Any) -> None:
+        self.calls.append(("put", Key))
+        self.objects[Key] = details
+
+    def delete_object(self, Bucket: str, Key: str) -> None:
+        self.calls.append(("delete", Key))
+        del self.objects[Key]
+
+
+@pytest.fixture
+def storage(monkeypatch: pytest.MonkeyPatch) -> FakeStorage:
+    fake = FakeStorage()
+    monkeypatch.setattr("boto3.client", lambda *args, **kwargs: fake)
+    return fake
+
+
+PUBLISH_SETTINGS = Settings(
+    bucket="library", endpoint="https://example.com", key_id="k", secret="s"
+)
+
+
+def test_the_published_copy_has_every_page_the_library_links_to(
+    site: tuple[TestClient, Path], storage: FakeStorage
+) -> None:
+    _, run_dir = site
+
+    publish_library(run_dir.parent, PUBLISH_SETTINGS)
+
+    listing = json.loads(storage.objects["api/videos"]["Body"])
+    assert [v["id"] for v in listing["videos"]] == ["abc"]
+    assert json.loads(storage.objects["api/videos/abc"]["Body"])["tiers"]["3"]
+    page = storage.objects["watch/abc"]
+    assert page["ContentType"].startswith("text/html")
+    assert b"data-published" in page["Body"]
+    assert b'href="/index.html"' in page["Body"]
+    assert storage.objects["static/watch.js"]["ContentType"] == "text/javascript"
+    assert "index.html" in storage.objects
+
+
+def test_only_what_changed_is_uploaded_and_removed_items_are_deleted(
+    tmp_path: Path, storage: FakeStorage
+) -> None:
+    state = tmp_path / "published.json"
+    files = {"a": SiteFile(b"one", "text/plain"), "b": SiteFile(b"two", "text/plain")}
+    assert upload(files, PUBLISH_SETTINGS, state) == 2
+    storage.calls.clear()
+
+    files = {"a": SiteFile(b"changed", "text/plain")}
+    assert upload(files, PUBLISH_SETTINGS, state) == 2
+
+    assert storage.calls == [("put", "a"), ("delete", "b")]
+    assert upload(files, PUBLISH_SETTINGS, state) == 0
+
+
+def test_an_article_is_published_without_its_text_unless_asked(
+    tmp_path: Path, storage: FakeStorage
+) -> None:
+    run_dir = save_article(_article("The whole article. It has two sentences."), tmp_path)
+    detail = f"api/videos/{run_dir.name}"
+
+    publish_library(tmp_path, PUBLISH_SETTINGS)
+    assert b"The whole article." not in storage.objects[detail]["Body"]
+
+    publish_library(tmp_path, replace(PUBLISH_SETTINGS, article_text=True))
+    assert b"The whole article." in storage.objects[detail]["Body"]
+
+
+def test_articles_are_published_with_the_reader_page() -> None:
+    files = site_files([], [{"id": "x", "kind": "article"}, {"id": "y", "kind": "video"}], {})
+    assert b"/static/read.js" in files["watch/x"].body
+    assert b"/static/watch.js" in files["watch/y"].body
+
+
+def test_a_video_saved_to_the_playlist_is_shortened_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first, second = "https://www.youtube.com/watch?v=one", "https://www.youtube.com/watch?v=two"
+    saved = [first]
+    monkeypatch.setattr("video_summariser.web.playlist_links", lambda _: saved)
+    jobs = JobQueue(tmp_path)
+
+    queue_from_playlist("https://www.youtube.com/playlist?list=x", jobs)
+    assert [(j["kind"], j["url"]) for j in jobs.snapshot()] == [("shorten", first)]
+
+    # A later check only takes what was saved since.
+    saved.append(second)
+    queue_from_playlist("https://www.youtube.com/playlist?list=x", jobs)
+    queue_from_playlist("https://www.youtube.com/playlist?list=x", jobs)
+    assert [j["url"] for j in jobs.snapshot()] == [first, second]
+    assert json.loads((tmp_path / "inbox.json").read_text()) == [first, second]

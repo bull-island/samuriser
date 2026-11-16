@@ -11,7 +11,7 @@
   <main class="page">
     <h1>Video Summariser</h1>
 
-    <section class="panel">
+    <section class="panel local-only">
       <label for="links">Video or article links, one per line</label>
       <textarea id="links" rows="3" placeholder="https://…"></textarea>
       <div class="actions">
@@ -22,7 +22,7 @@
       <p id="add-message" class="muted" role="status"></p>
     </section>
 
-    <input id="search" type="search" placeholder="Search everything you've added" aria-label="Search">
+    <input id="search" class="local-only" type="search" placeholder="Search everything you've added" aria-label="Search">
     <section id="results" class="results"></section>
 
     <section id="jobs"></section>

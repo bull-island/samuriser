@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urldefrag, urlparse
 import yt_dlp
 from PIL import Image
 
+JS_RUNTIMES = ("node", "bun")
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
 
 # H.264 up to 1080p keeps on-screen text legible and decodes quickly on any Mac.
@@ -87,8 +88,10 @@ def set_watched(run_dir: Path, watched: bool) -> None:
 def _options(**extra: Any) -> dict[str, Any]:
     options: dict[str, Any] = {"noplaylist": True, "quiet": True, "noprogress": True}
     # yt-dlp needs a JS runtime for YouTube's challenges and only enables deno by default.
-    if shutil.which("bun"):
-        options["js_runtimes"] = {"bun": {}}
+    # Node comes first because yt-dlp stops supporting bun versions newer than it has tested.
+    runtime = next((name for name in JS_RUNTIMES if shutil.which(name)), None)
+    if runtime:
+        options["js_runtimes"] = {runtime: {}}
     return options | extra
 
 
@@ -101,6 +104,14 @@ def _inspect(url: str, runs_dir: Path) -> tuple[Path, dict[str, Any]]:
     run_dir = runs_dir / re.sub(r"[^\w-]+", "_", info["id"])
     run_dir.mkdir(parents=True, exist_ok=True)
     return run_dir, info
+
+
+def playlist_links(url: str) -> list[str]:
+    """Links to each video in a playlist, without reading the videos themselves."""
+    with yt_dlp.YoutubeDL(_options(extract_flat=True)) as ydl:
+        info = ydl.extract_info(url, download=False)
+    entries = (info or {}).get("entries") or []
+    return [canonical_url(entry["url"]) for entry in entries if entry and entry.get("url")]
 
 
 def download_page(url: str) -> bytes | None:

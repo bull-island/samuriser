@@ -15,6 +15,7 @@
 
     <section id="player" hidden>
       <video id="video" controls playsinline preload="metadata"></video>
+      <div id="youtube" hidden></div>
       <div class="bars">
         <span class="bar-label">Full</span>
         <canvas id="full-bar" class="bar"></canvas>
@@ -27,21 +28,23 @@
       <div class="controls">
         <div id="lengths" class="segmented" role="group" aria-label="Length"></div>
         <div id="speeds" class="segmented" role="group" aria-label="Speed"></div>
-        <button id="watched"></button>
+        <button id="watched" class="local-only"></button>
       </div>
     </section>
 
     <section id="not-ready" class="panel" hidden>
       <p id="not-ready-message"></p>
-      <button id="shorten" class="primary">Shorten this video</button>
+      <button id="shorten" class="primary local-only">Shorten this video</button>
     </section>
 
     <div class="columns">
       <section>
         <h2>Summary</h2>
         <p id="summary"></p>
-        <h2>Key ideas</h2>
-        <ol id="ideas" class="ideas"></ol>
+        <details class="reading-ideas">
+          <summary id="ideas-label"></summary>
+          <ol id="ideas" class="ideas"></ol>
+        </details>
       </section>
       <section id="sections-column" hidden>
         <h2>Sections</h2>
