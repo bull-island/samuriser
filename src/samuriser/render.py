@@ -13,9 +13,9 @@ import numpy as np
 import numpy.typing as npt
 from PIL import Image, ImageDraw, ImageFont
 
-from video_summariser.decide import Section
-from video_summariser.decide import timestamp as _clock
-from video_summariser.transcribe import Sentence
+from samuriser.decide import Section
+from samuriser.decide import timestamp as _clock
+from samuriser.transcribe import Sentence
 
 SAMPLE_RATE = 16000
 WINDOW_SAMPLES = 320  # 20 ms

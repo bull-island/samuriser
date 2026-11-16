@@ -1,7 +1,7 @@
-// The only part that talks to the local Summariser. Pages on other sites can't call it
+// The only part that talks to the local Samuriser. Pages on other sites can't call it
 // directly, so the popup and the YouTube panel send their requests through here.
 const SERVER = "http://127.0.0.1:8765";
-const MENU_ID = "add-to-summariser";
+const MENU_ID = "add-to-samuriser";
 const BADGE_MS = 4000;
 
 async function call(path, body) {
@@ -11,7 +11,7 @@ async function call(path, body) {
   const response = await fetch(`${SERVER}${path}`, options);
   if (!response.ok) {
     const problem = await response.json().catch(() => ({}));
-    throw new Error(String(problem.detail || `Summariser said ${response.status}`));
+    throw new Error(String(problem.detail || `Samuriser said ${response.status}`));
   }
   return response.json();
 }
@@ -36,18 +36,18 @@ function flashBadge(text, color, title) {
 }
 
 // Adds a link from a menu, and queues the "worth my time?" check so the verdict is
-// waiting in Summariser. A link that's already there is left alone. Returns what happened.
+// waiting in Samuriser. A link that's already there is left alone. Returns what happened.
 async function addLink(url) {
   if (!/^https?:/.test(url || "")) return "failed";
   try {
     const { item, job } = await call(`/api/lookup?url=${encodeURIComponent(url)}`);
     const known = item !== null || (job !== null && job.error === null);
     if (!known) await call("/api/jobs", { urls: [url], kind: "check", page: null });
-    flashBadge("✓", "#1baf7a", known ? "Already in Summariser" : "Added to Summariser");
+    flashBadge("✓", "#1baf7a", known ? "Already in Samuriser" : "Added to Samuriser");
     return known ? "known" : "added";
   } catch (error) {
     const offline = error instanceof TypeError;
-    flashBadge("!", "#e66767", offline ? "Summariser isn't running" : `Couldn't add: ${error.message}`);
+    flashBadge("!", "#e66767", offline ? "Samuriser isn't running" : `Couldn't add: ${error.message}`);
     return offline ? "offline" : "failed";
   }
 }
@@ -56,7 +56,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
-      title: "Add to Summariser",
+      title: "Add to Samuriser",
       contexts: ["link", "page", "video"],
     });
   });

@@ -9,8 +9,8 @@ from urllib.parse import urldefrag, urlparse
 
 import trafilatura
 
-from video_summariser.fetch import download_page, load_info, save_info, save_thumbnail
-from video_summariser.transcribe import Sentence
+from samuriser.fetch import download_page, load_info, save_info, save_thumbnail
+from samuriser.transcribe import Sentence
 
 # Below this a page is a video's landing page or a stub, not something to read.
 MIN_ARTICLE_WORDS = 100

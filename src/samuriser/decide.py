@@ -7,8 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from video_summariser.llm import ask_claude
-from video_summariser.transcribe import Sentence
+from samuriser.llm import ask_claude
+from samuriser.transcribe import Sentence
 
 SECTION_FORMAT = """\
 Return sections that cover every sentence id exactly once, in order. Set "keep" to true or false. \

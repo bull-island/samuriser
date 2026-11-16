@@ -1,4 +1,6 @@
-# Video Summariser
+# Samuriser
+
+Cuts videos and articles down to what matters, like a samurai.
 
 A personal tool for getting through videos and articles faster. It summarises them, cuts the padding, and tells you when something only repeats ideas you've already seen.
 
@@ -23,7 +25,7 @@ A personal tool for getting through videos and articles faster. It summarises th
 
 ```sh
 uv sync
-uv run summariser
+uv run samuriser
 ```
 
 Then open http://127.0.0.1:8765 and paste links, one per line.
@@ -45,13 +47,13 @@ The copy has no login. Anyone with its address can read it, so use an address th
 Put these in a `.env` file in this folder:
 
 ```sh
-SUMMARISER_PUBLISH_BUCKET=<bucket name>
-SUMMARISER_PUBLISH_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
-SUMMARISER_PUBLISH_KEY_ID=<access key id>
-SUMMARISER_PUBLISH_SECRET=<secret access key>
+SAMURISER_PUBLISH_BUCKET=<bucket name>
+SAMURISER_PUBLISH_ENDPOINT=https://<account id>.r2.cloudflarestorage.com
+SAMURISER_PUBLISH_KEY_ID=<access key id>
+SAMURISER_PUBLISH_SECRET=<secret access key>
 ```
 
-An article is published as its summary and key ideas, with a link to the original. To include the full text so you can read it on your phone, add `SUMMARISER_PUBLISH_ARTICLE_TEXT=1`. That puts a complete copy of someone else's writing at a public address, so only do it for your own reading and keep the address to yourself.
+An article is published as its summary and key ideas, with a link to the original. To include the full text so you can read it on your phone, add `SAMURISER_PUBLISH_ARTICLE_TEXT=1`. That puts a complete copy of someone else's writing at a public address, so only do it for your own reading and keep the address to yourself.
 
 While the site is running it republishes after every change. To publish by hand, run `uv run publish`. Then open `<public address>/index.html` on your phone.
 
@@ -60,17 +62,17 @@ Search, marking things as watched and changing cuts only work on the local site.
 To add videos from your phone, make an unlisted YouTube playlist and add its link to `.env`:
 
 ```sh
-SUMMARISER_INBOX_PLAYLIST=https://www.youtube.com/playlist?list=<id>
+SAMURISER_INBOX_PLAYLIST=https://www.youtube.com/playlist?list=<id>
 ```
 
 While the site is running it checks the playlist every five minutes and shortens anything new, so saving a video to that playlist in the YouTube app adds it to your library. Videos saved while the Mac is off are picked up the next time the site runs.
 
 ## Chrome extension
 
-The `extension/` folder adds Summariser to Chrome. It needs the local site running.
+The `extension/` folder adds Samuriser to Chrome. It needs the local site running.
 
-- **Three-dot menu on YouTube thumbnails:** has an **Add to Summariser** item. YouTube has no supported way to extend that menu, so expect it to need fixing when YouTube changes.
-- **Right-click** any video thumbnail, link or page and choose **Add to Summariser**. It's added and checked in the background, and the verdict appears in the library.
+- **Three-dot menu on YouTube thumbnails:** has an **Add to Samuriser** item. YouTube has no supported way to extend that menu, so expect it to need fixing when YouTube changes.
+- **Right-click** any video thumbnail, link or page and choose **Add to Samuriser**. It's added and checked in the background, and the verdict appears in the library.
 - **Toolbar button:** adds the page you're looking at, as you see it, which helps with sites you're logged in to. It also links to your library.
 - **On a YouTube video:** one line shows whether it's added and lets you shorten it. A shortened video can then play in YouTube's own player by jumping over the cuts.
 

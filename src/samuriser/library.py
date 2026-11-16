@@ -8,10 +8,10 @@ from typing import Literal, TypeVar
 
 from pydantic import BaseModel
 
-from video_summariser.decide import timestamp
-from video_summariser.fetch import load_info
-from video_summariser.llm import ask_claude
-from video_summariser.transcribe import (
+from samuriser.decide import timestamp
+from samuriser.fetch import load_info
+from samuriser.llm import ask_claude
+from samuriser.transcribe import (
     QUICK_TRANSCRIPT,
     Sentence,
     load_sentences,

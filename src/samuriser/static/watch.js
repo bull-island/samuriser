@@ -61,7 +61,7 @@ async function youtubePlayer(start) {
         onError: (event) =>
           reject(
             new Error(
-              `YouTube won't play this video here (error ${event.data}). On YouTube, the Summariser extension jumps over the cuts.`,
+              `YouTube won't play this video here (error ${event.data}). On YouTube, the Samuriser extension jumps over the cuts.`,
             ),
           ),
       },

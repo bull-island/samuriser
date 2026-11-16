@@ -29,8 +29,8 @@ function itemLink(item, label) {
   return el("a", { href, target: "_blank", rel: "noopener" }, label);
 }
 
-// Shows whether one link is in Summariser and offers to add it. The verdict and summary
-// are left to Summariser's own pages. `getPage` supplies the page's HTML when adding,
+// Shows whether one link is in Samuriser and offers to add it. The verdict and summary
+// are left to Samuriser's own pages. `getPage` supplies the page's HTML when adding,
 // and `extras` adds controls for a saved item.
 function createCard(root, { url, getPage = async () => null, extras = () => [] }) {
   let timer = null;
@@ -83,7 +83,7 @@ function createCard(root, { url, getPage = async () => null, extras = () => [] }
     if (!reply) return [el("span", { class: "vs-muted" }, "Checking…")];
     if (!reply.ok && reply.offline) {
       return [
-        el("span", {}, "Summariser isn't running. Start it with “uv run summariser”."),
+        el("span", {}, "Samuriser isn't running. Start it with “uv run samuriser”."),
         el("button", { onclick: refresh }, "Try again"),
       ];
     }
@@ -98,18 +98,18 @@ function createCard(root, { url, getPage = async () => null, extras = () => [] }
       const retry = job ? job.kind : "check";
       return [el("span", { class: "vs-error" }, problem), jobButton("Try again", retry)];
     }
-    if (!item) return [jobButton("Add to Summariser", "check")];
+    if (!item) return [jobButton("Add to Samuriser", "check")];
     const shortened = item.playable || item.shortened;
     return [
       el("span", {}, "Added ✓"),
-      itemLink(item, "Open in Summariser"),
+      itemLink(item, "Open in Samuriser"),
       shortened ? null : jobButton("Shorten it", "shorten", false),
       ...extras(item),
     ].filter((node) => node !== null);
   }
 
   function redraw() {
-    root.replaceChildren(el("strong", {}, "Summariser"), ...body());
+    root.replaceChildren(el("strong", {}, "Samuriser"), ...body());
   }
 
   function stop() {

@@ -4,9 +4,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from video_summariser.llm import MissingCredentialsError
-from video_summariser.pipeline import prepare
-from video_summariser.render import render
+from samuriser.llm import MissingCredentialsError
+from samuriser.pipeline import prepare
+from samuriser.render import render
 
 
 def main() -> None:

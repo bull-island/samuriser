@@ -10,8 +10,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from pydantic import BaseModel
 
-from video_summariser.decide import timestamp
-from video_summariser.llm import ask_claude
+from samuriser.decide import timestamp
+from samuriser.llm import ask_claude
 
 SAMPLE_SECONDS = 20
 CELL_SIZE = (480, 270)

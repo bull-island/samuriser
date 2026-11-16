@@ -1,4 +1,4 @@
-// Adds a Summariser line beside a YouTube video, and can play a shortened video in
+// Adds a Samuriser line beside a YouTube video, and can play a shortened video in
 // YouTube's own player by jumping over the cuts.
 const JUMP_CHECK_MS = 100;
 const EDGE_TOLERANCE = 0.05;
@@ -126,7 +126,7 @@ function playbackControls(item) {
         { class: "vs-error vs-wide" },
         "YouTube couldn't jump over the cuts smoothly, so shortened playback is off for this video. ",
         // Only a downloaded video has somewhere else to play.
-        item.has_video ? itemLink(item, "Play the shortened version in Summariser") : null,
+        item.has_video ? itemLink(item, "Play the shortened version in Samuriser") : null,
       ),
     ];
   }
@@ -187,7 +187,7 @@ async function mount() {
   const host = await panelHost();
   if (mine !== generation) return;
   playback = { on: false, tier: "3", timer: null, pending: null, jumps: [], failed: false, item: null, stats: null };
-  root = el("section", { class: host ? "vs-panel" : "vs-panel vs-floating", "aria-label": "Summariser" });
+  root = el("section", { class: host ? "vs-panel" : "vs-panel vs-floating", "aria-label": "Samuriser" });
   (host || document.body).prepend(root);
   card = createCard(root, { url, extras: playbackControls });
 }

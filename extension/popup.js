@@ -19,7 +19,7 @@ async function pageOf(tabId) {
     });
     return result && result.length <= MAX_PAGE_CHARACTERS ? result : null;
   } catch {
-    // Some pages can't be read. Summariser then fetches the link itself.
+    // Some pages can't be read. Samuriser then fetches the link itself.
     return null;
   }
 }

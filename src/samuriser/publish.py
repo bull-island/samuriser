@@ -42,11 +42,11 @@ class SiteFile:
 def load_settings() -> Settings | None:
     """Where to publish, or None when publishing hasn't been set up."""
     bucket, endpoint, key_id, secret = (
-        os.environ.get(f"SUMMARISER_PUBLISH_{name}", "") for name in SETTING_NAMES
+        os.environ.get(f"SAMURISER_PUBLISH_{name}", "") for name in SETTING_NAMES
     )
     if not (bucket and endpoint and key_id and secret):
         return None
-    article_text = os.environ.get("SUMMARISER_PUBLISH_ARTICLE_TEXT") == "1"
+    article_text = os.environ.get("SAMURISER_PUBLISH_ARTICLE_TEXT") == "1"
     return Settings(bucket, endpoint, key_id, secret, article_text)
 
 

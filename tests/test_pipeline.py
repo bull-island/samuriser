@@ -17,9 +17,9 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from pydantic import BaseModel
 
-from video_summariser import library, pipeline, visuals
-from video_summariser.articles import Article, read_article, save_article, split_blocks
-from video_summariser.decide import (
+from samuriser import library, pipeline, visuals
+from samuriser.articles import Article, read_article, save_article, split_blocks
+from samuriser.decide import (
     Decision,
     Section,
     build_prompt,
@@ -29,11 +29,11 @@ from video_summariser.decide import (
     target_for,
     validate_sections,
 )
-from video_summariser.fetch import Source, canonical_url, load_info, preview, save_info
-from video_summariser.library import Check, Digest, Idea, check_video, known_ideas, search
-from video_summariser.llm import ask_claude
-from video_summariser.publish import Settings, SiteFile, site_files, upload
-from video_summariser.render import (
+from samuriser.fetch import Source, canonical_url, load_info, preview, save_info
+from samuriser.library import Check, Digest, Idea, check_video, known_ideas, search
+from samuriser.llm import ask_claude
+from samuriser.publish import Settings, SiteFile, site_files, upload
+from samuriser.render import (
     Chapter,
     Segment,
     VideoInfo,
@@ -48,8 +48,8 @@ from video_summariser.render import (
     tier_segments,
     write_overlay_frames,
 )
-from video_summariser.speech import list_voices
-from video_summariser.transcribe import (
+from samuriser.speech import list_voices
+from samuriser.transcribe import (
     MODEL,
     QUICK_MODEL,
     Sentence,
@@ -60,7 +60,7 @@ from video_summariser.transcribe import (
     transcribe,
     transcribe_quickly,
 )
-from video_summariser.web import (
+from samuriser.web import (
     Job,
     JobQueue,
     create_app,
@@ -134,7 +134,7 @@ def test_a_new_edit_ends_with_a_sign_off_even_if_the_chosen_line_is_invalid(
         opening=None,
         sign_off=99,
     )
-    monkeypatch.setattr("video_summariser.decide.ask_claude", lambda *_: answer)
+    monkeypatch.setattr("samuriser.decide.ask_claude", lambda *_: answer)
     sentences = [sentence(0, 0, 1), sentence(1, 2, 3), sentence(2, 4, 5)]
 
     sections = decide("T", [], sentences, tmp_path, 0.3)
@@ -154,7 +154,7 @@ def test_a_new_edit_opens_with_one_line_of_a_long_intro(
         opening=1,
         sign_off=4,
     )
-    monkeypatch.setattr("video_summariser.decide.ask_claude", lambda *_: answer)
+    monkeypatch.setattr("samuriser.decide.ask_claude", lambda *_: answer)
     sentences = [sentence(i, i * 2, i * 2 + 1) for i in range(5)]
 
     sections = decide("T", [], sentences, tmp_path, 0.3)
@@ -366,8 +366,8 @@ def _fake_claude(
         return subprocess.CompletedProcess(command, 0, stdout=json.dumps(event) + "\n", stderr="")
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr("video_summariser.llm.shutil.which", lambda _: "/usr/bin/claude")
-    monkeypatch.setattr("video_summariser.llm.subprocess.run", fake_run)
+    monkeypatch.setattr("samuriser.llm.shutil.which", lambda _: "/usr/bin/claude")
+    monkeypatch.setattr("samuriser.llm.subprocess.run", fake_run)
 
 
 def test_claude_code_runs_with_no_tools_and_returns_the_parsed_answer(
@@ -435,7 +435,7 @@ def _refusing_downloader(
                 raise yt_dlp.utils.YoutubeDLError("Not found")
             return BytesIO(picture)
 
-    monkeypatch.setattr("video_summariser.fetch.yt_dlp.YoutubeDL", RefusingDownloader)
+    monkeypatch.setattr("samuriser.fetch.yt_dlp.YoutubeDL", RefusingDownloader)
     return requested
 
 
@@ -537,7 +537,7 @@ def test_the_quick_transcript_never_replaces_the_accurate_one(
         words = [{"word": "Accurate.", "start": 0.0, "end": 1.0}]
         return {"segments": [{"text": "Rough phrase.", "start": 0.0, "end": 1.0, "words": words}]}
 
-    monkeypatch.setattr("video_summariser.transcribe.mlx_whisper.transcribe", fake_whisper)
+    monkeypatch.setattr("samuriser.transcribe.mlx_whisper.transcribe", fake_whisper)
     (tmp_path / "audio.wav").touch()
 
     def saved_text() -> list[str]:
@@ -865,7 +865,7 @@ ARTICLE_PAGE = f"""
 def test_an_article_page_becomes_plain_blocks_without_its_repeated_title(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("video_summariser.articles.download_page", lambda _: ARTICLE_PAGE.encode())
+    monkeypatch.setattr("samuriser.articles.download_page", lambda _: ARTICLE_PAGE.encode())
 
     article = read_article("https://www.example.com/post#comments")
 
@@ -880,7 +880,7 @@ def test_an_article_page_becomes_plain_blocks_without_its_repeated_title(
 
 def test_a_page_with_little_text_is_not_an_article(monkeypatch: pytest.MonkeyPatch) -> None:
     page = "<html><body><article><p>Just a short video description.</p></article></body></html>"
-    monkeypatch.setattr("video_summariser.articles.download_page", lambda _: page.encode())
+    monkeypatch.setattr("samuriser.articles.download_page", lambda _: page.encode())
     assert read_article("https://example.com/video") is None
 
 
@@ -987,7 +987,7 @@ def test_a_sentence_is_read_aloud_once_then_served_from_disk(
         requests.append(json.loads(request.data))
         return BytesIO(b"mp3 audio")
 
-    monkeypatch.setattr("video_summariser.speech.urllib.request.urlopen", fake_kokoro)
+    monkeypatch.setattr("samuriser.speech.urllib.request.urlopen", fake_kokoro)
     client = TestClient(create_app(tmp_path, start_worker=False))
     url = f"/speech/{run_dir.name}/0?voice=af_sky"
 
@@ -1005,7 +1005,7 @@ def test_speech_explains_when_kokoro_is_not_running(
     def refused(*_: Any, **__: Any) -> None:
         raise urllib.error.URLError("Connection refused")
 
-    monkeypatch.setattr("video_summariser.speech.urllib.request.urlopen", refused)
+    monkeypatch.setattr("samuriser.speech.urllib.request.urlopen", refused)
     run_dir = save_article(_article("One two three."), tmp_path)
     client = TestClient(create_app(tmp_path, start_worker=False))
 
@@ -1026,9 +1026,7 @@ def test_unsafe_voices_and_missing_sentences_are_refused(
 
 def test_only_current_english_voices_are_offered(monkeypatch: pytest.MonkeyPatch) -> None:
     body = json.dumps({"voices": ["af_sky", "bm_daniel", "af_v0sky", "ef_dora"]}).encode()
-    monkeypatch.setattr(
-        "video_summariser.speech.urllib.request.urlopen", lambda *_, **__: BytesIO(body)
-    )
+    monkeypatch.setattr("samuriser.speech.urllib.request.urlopen", lambda *_, **__: BytesIO(body))
     assert list_voices() == ["af_sky", "bm_daniel"]
 
 
@@ -1144,7 +1142,7 @@ def test_a_running_job_shows_its_title_and_how_long_it_has_taken(
         seen.append(job.view())
         return pipeline.Summary(run_dir, "Title abc", Digest(summary="s", ideas=[]))
 
-    monkeypatch.setattr("video_summariser.web.check", fake_check)
+    monkeypatch.setattr("samuriser.web.check", fake_check)
 
     jobs._run(job)
 
@@ -1155,7 +1153,7 @@ def test_progress_follows_the_stages_and_never_claims_to_be_finished(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     clock = [1000.0]
-    monkeypatch.setattr("video_summariser.web.time.monotonic", lambda: clock[0])
+    monkeypatch.setattr("samuriser.web.time.monotonic", lambda: clock[0])
     job = Job("shorten", "https://example.com/article")
     assert job.progress() == 0
 
@@ -1193,7 +1191,7 @@ def test_a_job_uses_the_page_it_was_given_and_remembers_the_link(
         pages.append(page)
         return pipeline.Summary(run_dir, "T", Digest(summary="s", ideas=[]))
 
-    monkeypatch.setattr("video_summariser.web.check", fake_check)
+    monkeypatch.setattr("samuriser.web.check", fake_check)
     app = create_app(tmp_path, start_worker=False)
 
     JobQueue(tmp_path)._run(Job("check", "https://example.com/watch/abc#t=1", page="<html>"))
@@ -1209,7 +1207,7 @@ def test_a_page_from_the_browser_is_read_without_downloading_it(
     def must_not_download(_: str) -> None:
         raise AssertionError("The page was already supplied")
 
-    monkeypatch.setattr("video_summariser.articles.download_page", must_not_download)
+    monkeypatch.setattr("samuriser.articles.download_page", must_not_download)
 
     article = read_article("https://example.com/members-only", ARTICLE_PAGE)
 
@@ -1280,8 +1278,8 @@ def test_a_youtube_video_is_shortened_from_its_text_without_being_downloaded(
     def must_not_download(*_: Any, **__: Any) -> None:
         raise AssertionError("The video should not be downloaded")
 
-    monkeypatch.setattr("video_summariser.web.check", lambda *_: summary)
-    monkeypatch.setattr("video_summariser.web.prepare", must_not_download)
+    monkeypatch.setattr("samuriser.web.check", lambda *_: summary)
+    monkeypatch.setattr("samuriser.web.prepare", must_not_download)
     monkeypatch.setattr(pipeline, "decide", _keep_first_and_last)
 
     JobQueue(tmp_path)._run(Job("shorten", "https://youtu.be/abc"))
@@ -1303,11 +1301,9 @@ def test_a_video_that_cannot_play_in_place_is_downloaded_to_shorten_it(
     job = Job("shorten", "https://vimeo.com/abc")
     downloaded: list[str] = []
 
-    monkeypatch.setattr("video_summariser.web.check", lambda *_: summary)
-    monkeypatch.setattr(
-        "video_summariser.web.prepare", lambda url, *_, **__: downloaded.append(url)
-    )
-    monkeypatch.setattr("video_summariser.web.player_ranges", lambda _: {})
+    monkeypatch.setattr("samuriser.web.check", lambda *_: summary)
+    monkeypatch.setattr("samuriser.web.prepare", lambda url, *_, **__: downloaded.append(url))
+    monkeypatch.setattr("samuriser.web.player_ranges", lambda _: {})
 
     JobQueue(tmp_path)._run(job)
 
@@ -1425,7 +1421,7 @@ def test_a_video_saved_to_the_playlist_is_shortened_once(
 ) -> None:
     first, second = "https://www.youtube.com/watch?v=one", "https://www.youtube.com/watch?v=two"
     saved = [first]
-    monkeypatch.setattr("video_summariser.web.playlist_links", lambda _: saved)
+    monkeypatch.setattr("samuriser.web.playlist_links", lambda _: saved)
     jobs = JobQueue(tmp_path)
 
     queue_from_playlist("https://www.youtube.com/playlist?list=x", jobs)

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import yt_dlp
 
-from video_summariser.articles import Article, is_article, read_article, save_article
-from video_summariser.decide import ARTICLE_PROMPT, SYSTEM_PROMPT, Section, decide, target_for
-from video_summariser.fetch import (
+from samuriser.articles import Article, is_article, read_article, save_article
+from samuriser.decide import ARTICLE_PROMPT, SYSTEM_PROMPT, Section, decide, target_for
+from samuriser.fetch import (
     Source,
     fetch_audio,
     get_source,
@@ -16,15 +16,15 @@ from video_summariser.fetch import (
     preview,
     set_watched,
 )
-from video_summariser.library import (
+from samuriser.library import (
     Digest,
     check_video,
     ensure_digest,
     known_ideas,
     sentences_for,
 )
-from video_summariser.transcribe import Sentence, extract_audio, transcribe, transcribe_quickly
-from video_summariser.visuals import describe_visuals
+from samuriser.transcribe import Sentence, extract_audio, transcribe, transcribe_quickly
+from samuriser.visuals import describe_visuals
 
 Report = Callable[[str], None]
 

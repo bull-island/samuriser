@@ -24,9 +24,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.types import Scope
 
-from video_summariser.articles import is_article, load_blocks
-from video_summariser.decide import Section, load_sections, save_sections, timestamp
-from video_summariser.fetch import (
+from samuriser.articles import is_article, load_blocks
+from samuriser.decide import Section, load_sections, save_sections, timestamp
+from samuriser.fetch import (
     THUMBNAIL_FILE,
     YOUTUBE_HOSTS,
     add_link,
@@ -35,7 +35,7 @@ from video_summariser.fetch import (
     playlist_links,
     set_watched,
 )
-from video_summariser.library import (
+from samuriser.library import (
     Check,
     Digest,
     read_model,
@@ -43,7 +43,7 @@ from video_summariser.library import (
     sentences_for,
     video_dirs,
 )
-from video_summariser.pipeline import (
+from samuriser.pipeline import (
     DOWNLOAD_PLAN,
     PLANS,
     check,
@@ -51,7 +51,7 @@ from video_summariser.pipeline import (
     prepare,
     shorten_text,
 )
-from video_summariser.publish import (
+from samuriser.publish import (
     STATE_FILE,
     Settings,
     load_settings,
@@ -59,15 +59,15 @@ from video_summariser.publish import (
     upload,
     without_article_text,
 )
-from video_summariser.render import (
+from samuriser.render import (
     build_chapters,
     load_energy,
     probe_video,
     tier_segments,
     tier_spans,
 )
-from video_summariser.speech import is_voice_name, list_voices, write_speech
-from video_summariser.transcribe import Sentence, load_sentences
+from samuriser.speech import is_voice_name, list_voices, write_speech
+from samuriser.transcribe import Sentence, load_sentences
 
 STATIC_DIR = Path(__file__).parent / "static"
 HOST = "127.0.0.1"
@@ -499,7 +499,7 @@ def _is_web_link(url: str) -> bool:
 
 
 def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
-    app = FastAPI(title="Video Summariser")
+    app = FastAPI(title="Samuriser")
     publisher = Publisher(runs_dir)
     jobs = JobQueue(runs_dir, on_done=publisher.changed)
     if start_worker:
@@ -507,7 +507,7 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
         threading.Thread(target=publisher.run_forever, daemon=True).start()
         # Catch up on anything that changed while the site wasn't running.
         publisher.changed()
-        playlist = os.environ.get("SUMMARISER_INBOX_PLAYLIST")
+        playlist = os.environ.get("SAMURISER_INBOX_PLAYLIST")
         if playlist:
             threading.Thread(target=watch_playlist, args=(playlist, jobs), daemon=True).start()
 
@@ -639,5 +639,5 @@ def publish_main() -> None:
 
 def main() -> None:
     load_dotenv()
-    print(f"Video Summariser is running at http://{HOST}:{PORT}")
+    print(f"Samuriser is running at http://{HOST}:{PORT}")
     uvicorn.run(create_app(Path("runs")), host=HOST, port=PORT, log_level="warning")

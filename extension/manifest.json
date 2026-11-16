@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "Video Summariser",
+  "name": "Samuriser",
   "version": "0.3.6",
-  "description": "Adds videos and articles to your local Summariser with a right-click.",
+  "description": "Adds videos and articles to your local Samuriser with a right-click.",
   "permissions": ["activeTab", "scripting", "contextMenus"],
   "host_permissions": ["http://127.0.0.1:8765/*"],
   "background": { "service_worker": "background.js" },
-  "action": { "default_popup": "popup.html", "default_title": "Save to Summariser" },
+  "action": { "default_popup": "popup.html", "default_title": "Save to Samuriser" },
   "content_scripts": [
     {
       "matches": ["https://www.youtube.com/*"],

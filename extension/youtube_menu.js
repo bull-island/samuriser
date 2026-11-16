@@ -1,4 +1,4 @@
-// Adds "Add to Summariser" to the three-dot menu on YouTube's video thumbnails.
+// Adds "Add to Samuriser" to the three-dot menu on YouTube's video thumbnails.
 // YouTube has no supported way to extend that menu, so this relies on its element names
 // and will need updating when they change. The right-click menu doesn't depend on any of it.
 const VIDEO_ITEMS = [
@@ -22,7 +22,7 @@ const CONFIRM_MS = 900;
 const RESULTS = {
   added: "Added ✓",
   known: "Already added ✓",
-  offline: "Summariser isn't running",
+  offline: "Samuriser isn't running",
   failed: "Couldn't add",
 };
 
@@ -61,7 +61,7 @@ function reportUnknownMenu() {
   const popups = [...document.querySelectorAll("ytd-popup-container > *, tp-yt-iron-dropdown, [role='menu'], [role='dialog']")]
     .filter((node) => isShown(node) && !node.closest(PAGE_AREAS));
   const found = popups.map((node) => outline(node)).join("\n---\n") || "(no pop-up found)";
-  console.info(`[Summariser] Couldn't find this video's menu. Its structure:\n${found}`);
+  console.info(`[Samuriser] Couldn't find this video's menu. Its structure:\n${found}`);
 }
 
 // YouTube fixes the menu's height as it opens, before this item exists, so without
@@ -79,7 +79,7 @@ function closeMenu() {
 }
 
 function menuItem(url) {
-  const label = el("span", {}, "Add to Summariser");
+  const label = el("span", {}, "Add to Samuriser");
   const item = el(
     "div",
     { class: "vs-menu-item", role: "menuitem", tabindex: "0" },
