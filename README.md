@@ -4,6 +4,10 @@
 
 **Watch a one-hour talk in about half the time.** Samuriser cuts the padding out of videos and articles and keeps the rest exactly as it was made: the original footage, in the original order, playing in YouTube's own player. It cuts like a samurai.
 
+![The player jumping from 1:17 to 4:50 in a talk, over a section that was cut](docs/demo.gif)
+
+*A 26-minute talk playing at 11 minutes. Here the player jumps from 1:17 to 4:50, over a section that was cut. Talk shown: ["Tightening every bolt"](https://youtu.be/Yr5fPxZvhOw) by Daniel Stenberg, FOSDEM 2025, CC BY.*
+
 Some real results: a 56-minute interview came out at 24 minutes, an 18-minute talk at 9, and a 34-minute talk at 10 minutes, or 5 at the shortest setting.
 
 It also tells you when something only repeats ideas you've already seen, so you can skip it altogether.
