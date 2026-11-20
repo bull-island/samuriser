@@ -1,12 +1,14 @@
 # Samuriser
 
+<p align="center"><img src="docs/samuriser.gif" width="384" alt="A pixel-art samurai slicing videos and documents in half as they fly towards him"></p>
+
 **Watch a one-hour talk in about half the time.** Samuriser cuts the padding out of videos and articles and keeps the rest exactly as it was made: the original footage, in the original order, playing in YouTube's own player. It cuts like a samurai.
 
 
 https://github.com/user-attachments/assets/2d928586-4033-4afd-9639-e62d2cbdbddc
 
 
-*Talks shown: ["Tightening every bolt"](https://youtu.be/Yr5fPxZvhOw) by Daniel Stenberg, FOSDEM 2025, and ["Autonomous Testing and the Future of Software Development"](https://youtu.be/fFSPwJFXVlw) by Will Wilson, The Linux Foundation. Both CC BY.*
+*Sound on for narration. Talks shown: ["Tightening every bolt"](https://youtu.be/Yr5fPxZvhOw) by Daniel Stenberg, FOSDEM 2025, and ["Autonomous Testing and the Future of Software Development"](https://youtu.be/fFSPwJFXVlw) by Will Wilson, The Linux Foundation. Both CC BY.*
 
 Some real results: a 56-minute interview came out at 24 minutes, an 18-minute talk at 9, and a 34-minute talk at 10 minutes, or 5 at the shortest setting.
 
@@ -129,5 +131,3 @@ This is a personal tool for getting through things you would otherwise watch or 
 Samuriser is not affiliated with or endorsed by YouTube, Google or Anthropic.
 
 It reads videos and pages through [yt-dlp](https://github.com/yt-dlp/yt-dlp), which some sites' terms of service don't allow. You are responsible for how you use it: follow the terms of the sites you use it with, and don't share downloaded videos or copies of other people's work.
-
-![A pixel-art samurai slicing videos and documents in half as they fly towards him](docs/samuriser.gif)
