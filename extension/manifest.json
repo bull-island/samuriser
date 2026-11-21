@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Samuriser",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "description": "Adds videos and articles to your local Samuriser with a right-click.",
   "permissions": ["activeTab", "scripting", "contextMenus"],

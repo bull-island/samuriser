@@ -32,6 +32,7 @@ let shortLength = 0;
 let finished = false;
 
 const YOUTUBE_PLAYING = 1;
+const YOUTUBE_ENDED = 0;
 
 function loadYoutubeApi() {
   return new Promise((resolve, reject) => {
@@ -77,6 +78,9 @@ async function youtubePlayer(start) {
     },
     get paused() {
       return player.getPlayerState() !== YOUTUBE_PLAYING;
+    },
+    get ended() {
+      return player.getPlayerState() === YOUTUBE_ENDED;
     },
     set playbackRate(speed) {
       player.setPlaybackRate(speed);
@@ -212,7 +216,10 @@ function seek(time) {
 }
 
 function jumpOverCuts() {
-  if (!ranges.length || video.paused || video.seeking) return;
+  if (!ranges.length || video.seeking) return;
+  // A video whose last kept part runs to its very end stops by itself.
+  if (video.ended) finishVideo();
+  if (video.paused) return;
   const time = video.currentTime;
   const next = ranges.find(([, end]) => time < end - EDGE_TOLERANCE);
   if (!next) {
@@ -435,7 +442,10 @@ async function showPlayer() {
   setInterval(jumpOverCuts, JUMP_CHECK_MS);
   setInterval(drawBars, BAR_REFRESH_MS);
   setInterval(() => {
-    if (!video.paused) store("position", video.currentTime);
+    if (video.paused) return;
+    store("position", video.currentTime);
+    // How far through the chosen length, for the bar on the library's picture.
+    store("progress", toShort(video.currentTime) / shortLength);
   }, SAVE_POSITION_MS);
 }
 

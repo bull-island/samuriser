@@ -4,7 +4,19 @@ const ACTIVE_REFRESH_MS = 2000;
 const IDLE_REFRESH_MS = 10000;
 const SEARCH_DELAY_MS = 250;
 
-let view = "all";
+const VIEWS = ["all", "unseen", "history"];
+
+// The view last chosen in this browser, so the list opens the same way next time.
+function savedView() {
+  try {
+    const saved = localStorage.getItem("library:view");
+    return VIEWS.includes(saved) ? saved : "all";
+  } catch {
+    return "all";
+  }
+}
+
+let view = savedView();
 let platform = null;
 let library = [];
 let shownLibrary = "";
@@ -34,9 +46,26 @@ function watchedLabel(video) {
   return `${word} ${new Date(video.watched_at).toLocaleDateString()}`;
 }
 
+// How far through a video this browser has played, which the player page records.
+function progress(video) {
+  if (video.watched) return null;
+  try {
+    const fraction = Number(localStorage.getItem(`${video.id}:progress`));
+    return fraction > 0 && fraction < 1 ? Math.round(fraction * 100) : null;
+  } catch {
+    return null;
+  }
+}
+
+function publishedLabel(video) {
+  const day = new Date(video.published).toLocaleDateString(undefined, { dateStyle: "medium" });
+  return `Published ${day}`;
+}
+
 function card(video) {
   const id = encodeURIComponent(video.id);
   const href = `/watch/${id}`;
+  const played = progress(video);
   return el(
     "article",
     { class: "video" },
@@ -46,6 +75,7 @@ function card(video) {
       { class: "thumb", href, tabindex: "-1", "aria-hidden": "true" },
       video.thumbnail ? el("img", { src: `/thumbnail/${id}`, alt: "" }) : null,
       el("span", { class: "kind" }, video.kind === "article" ? "Article" : "Video"),
+      played ? el("span", { class: "progress" }, el("span", { style: `width: ${played}%` })) : null,
     ),
     el(
       "div",
@@ -75,7 +105,9 @@ function card(video) {
         paddingBadge(video),
         // The label on the picture is hidden from screen readers along with its link.
         el("span", { class: "visually-hidden" }, video.kind === "article" ? "Article" : "Video"),
+        played ? el("span", { class: "visually-hidden" }, `${played}% watched`) : null,
         video.platform ? el("span", { class: "muted" }, video.platform) : null,
+        video.published ? el("span", { class: "muted" }, publishedLabel(video)) : null,
         el("span", { class: "muted" }, lengths(video) || ""),
       ),
       video.reason ? el("p", { class: "reason" }, video.reason) : null,
@@ -113,14 +145,21 @@ function historyVideos() {
 
 function setView(nextView, nextPlatform = null) {
   view = nextView;
+  try {
+    localStorage.setItem("library:view", view);
+  } catch {
+    // The choice just won't be remembered.
+  }
   platform = nextPlatform;
   renderLibrary();
 }
 
 function renderLibrary() {
   const history = historyVideos();
+  const unseen = library.filter((video) => !video.watched);
   document.getElementById("views").replaceChildren(
     toggle(`All ${library.length}`, view === "all", () => setView("all")),
+    toggle(`Unseen ${unseen.length}`, view === "unseen", () => setView("unseen")),
     toggle(`History ${history.length}`, view === "history", () => setView("history")),
   );
 
@@ -136,12 +175,17 @@ function renderLibrary() {
       : []),
   );
 
-  const shown = view === "all"
-    ? library
-    : history.filter((video) => platform === null || video.platform === platform);
-  const empty = view === "all"
-    ? "Paste a link above to get started."
-    : "Anything you mark as watched or read will appear here.";
+  const lists = {
+    all: library,
+    unseen,
+    history: history.filter((video) => platform === null || video.platform === platform),
+  };
+  const shown = lists[view];
+  const empty = {
+    all: "Paste a link above to get started.",
+    unseen: library.length ? "You've seen everything here." : "Paste a link above to get started.",
+    history: "Anything you mark as watched or read will appear here.",
+  }[view];
   showList(
     document.getElementById("videos"),
     shown.length ? shown.map(card) : [el("p", { class: "muted" }, empty)],
@@ -208,5 +252,9 @@ for (const button of document.querySelectorAll("button[data-kind]")) {
 document.getElementById("search").addEventListener("input", (event) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => runSearch(event.target.value), SEARCH_DELAY_MS);
+});
+// Coming back from a video, the page can be shown again without reloading.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) renderLibrary();
 });
 refresh();

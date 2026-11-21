@@ -141,6 +141,12 @@ def save_thumbnail(best_first: list[str], run_dir: Path) -> None:
             return
 
 
+def _published(info: dict[str, Any]) -> str | None:
+    """The day the site says a video went up, as YYYY-MM-DD."""
+    day = info.get("upload_date")
+    return f"{day[:4]}-{day[4:6]}-{day[6:]}" if day else None
+
+
 def _store_details(run_dir: Path, url: str, info: dict[str, Any]) -> None:
     save_info(
         run_dir,
@@ -149,6 +155,7 @@ def _store_details(run_dir: Path, url: str, info: dict[str, Any]) -> None:
         url=info.get("webpage_url", url),
         duration=info.get("duration"),
         platform=info.get("webpage_url_domain"),
+        published=_published(info),
     )
     save_thumbnail([t["url"] for t in info.get("thumbnails") or []][::-1], run_dir)
 

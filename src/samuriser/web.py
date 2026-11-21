@@ -366,6 +366,7 @@ def _card(run_dir: Path) -> dict[str, Any]:
         "watched": bool(info.get("watched")),
         "watched_at": info.get("watched_at"),
         "platform": info.get("platform"),
+        "published": info.get("published"),
         "has_video": (run_dir / "source.mp4").exists(),
         "thumbnail": (run_dir / THUMBNAIL_FILE).exists(),
         "playable": playable,

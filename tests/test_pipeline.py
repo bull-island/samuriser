@@ -421,6 +421,7 @@ def _refusing_downloader(
                 "id": "abc",
                 "title": "A video",
                 "duration": 9,
+                "upload_date": "20250314",
                 "webpage_url_domain": url.split("/")[2],
                 "thumbnails": [{"url": address} for address in listed],
             }
@@ -459,6 +460,16 @@ def test_the_best_thumbnail_that_loads_is_saved_at_card_size(
     details = preview("https://example.com/video", tmp_path)
 
     assert Image.open(details.run_dir / "thumbnail.jpg").size == (480, 270)
+
+
+def test_the_day_a_video_was_published_is_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _refusing_downloader(monkeypatch)
+
+    details = preview("https://example.com/video", tmp_path)
+
+    assert load_info(details.run_dir)["published"] == "2025-03-14"
 
 
 def test_a_missing_thumbnail_does_not_stop_the_job(

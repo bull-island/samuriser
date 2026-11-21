@@ -95,6 +95,11 @@ function skipCuts() {
     settleJump(video);
     return;
   }
+  // A video whose last kept part runs to its very end stops by itself.
+  if (video.ended) {
+    finishShortened();
+    return;
+  }
   if (video.paused) return;
   const time = video.currentTime;
   const next = playback.item.tiers[playback.tier].find(([, end]) => time < end - EDGE_TOLERANCE);

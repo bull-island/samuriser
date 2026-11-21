@@ -82,6 +82,8 @@ progress::-webkit-progress-value { background: var(--accent); transition: width 
 @media (max-width: 560px) { .video { grid-template-columns: minmax(0, 1fr); } }
 .thumb { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 6px; background: var(--raised); }
 .kind { position: absolute; right: 6px; bottom: 6px; padding: 0 6px; border-radius: 4px; background: rgba(0, 0, 0, 0.8); color: #fff; font-size: 12px; font-weight: 600; line-height: 18px; }
+.progress { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255, 255, 255, 0.3); }
+.progress span { display: block; height: 100%; background: var(--accent); }
 .thumb img { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
 .video-title { font-size: 17px; font-weight: 600; text-decoration: none; }
 .video-title:hover { text-decoration: underline; }
