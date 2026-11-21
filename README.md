@@ -3,7 +3,7 @@
 **Watch a one-hour talk in about half the time.** Samuriser cuts the padding out of videos and articles and keeps the rest exactly as it was made: the original footage, in the original order, playing in YouTube's own player. It cuts like a samurai.
 
 
-https://github.com/user-attachments/assets/2d928586-4033-4afd-9639-e62d2cbdbddc
+https://github.com/user-attachments/assets/fd0faa61-732d-496a-9883-36f521ff455e
 
 
 *Sound on for narration. Talks shown: ["Tightening every bolt"](https://youtu.be/Yr5fPxZvhOw) by Daniel Stenberg, FOSDEM 2025, and ["Autonomous Testing and the Future of Software Development"](https://youtu.be/fFSPwJFXVlw) by Will Wilson, The Linux Foundation. Both CC BY.*
