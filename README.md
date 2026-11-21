@@ -6,7 +6,7 @@
 https://github.com/user-attachments/assets/fd0faa61-732d-496a-9883-36f521ff455e
 
 
-*Sound on for narration. Talks shown: ["Tightening every bolt"](https://youtu.be/Yr5fPxZvhOw) by Daniel Stenberg, FOSDEM 2025, and ["Autonomous Testing and the Future of Software Development"](https://youtu.be/fFSPwJFXVlw) by Will Wilson, The Linux Foundation. Both CC BY.*
+*Sound on for narration. Talks shown: ["Tightening every bolt"](https://youtu.be/Yr5fPxZvhOw) by Daniel Stenberg, FOSDEM 2025, and ["Autonomous Testing and the Future of Software Development"](https://youtu.be/fFSPwJFXVlw) by Will Wilson, The Linux Foundation. Both CC BY. Article shown: ["Information overload"](https://en.wikipedia.org/wiki/Information_overload), Wikipedia, CC BY-SA 4.0.*
 
 <p align="center"><img src="docs/samuriser.gif" width="384" alt="A pixel-art samurai slicing videos and documents in half as they fly towards him"></p>
 
