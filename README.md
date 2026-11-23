@@ -19,28 +19,22 @@ You need an Apple Silicon Mac, Chrome, and either a signed-in [Claude Code](http
 **1. Install the tools** (with [Homebrew](https://brew.sh)):
 
 ```sh
-brew install uv node ffmpeg
+brew install uv node
 ```
 
-**2. Get Samuriser:**
+**2. Start Samuriser:**
 
 ```sh
-git clone https://github.com/bull-island/samuriser.git
-cd samuriser
-uv sync
+uvx --from git+https://github.com/bull-island/samuriser samuriser
 ```
 
-**3. Start it:**
+The first start takes a few minutes while it downloads. Run the same line whenever you want to use it.
 
-```sh
-uv run samuriser
-```
+**3. Open http://127.0.0.1:8765**, paste a video or article link and press **Shorten it**.
 
-If you use an API key instead of Claude Code, put `ANTHROPIC_API_KEY=<your key>` in a `.env` file in this folder first.
+**4. Add the Chrome extension** (optional, but it's the nicest way to use it): open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and pick `Samuriser/extension` in your home folder.
 
-**4. Open http://127.0.0.1:8765**, paste a video or article link and press **Shorten it**.
-
-**5. Add the Chrome extension** (optional, but it's the nicest way to use it): open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and pick the `extension` folder.
+Your library is kept in the `Samuriser` folder in your home folder. If you use an API key instead of Claude Code, put `ANTHROPIC_API_KEY=<your key>` in a file called `.env` in that folder. To get the newest version, add `--refresh` after `uvx`.
 
 ## How it works
 
@@ -89,7 +83,7 @@ The site only runs on your Mac. To use your library when the Mac is off, it can 
 
 The copy has no login. Anyone with its address can read it, so use an address that is hard to guess, such as R2's public development URL, and don't share it.
 
-Put these in a `.env` file in this folder:
+Put these in the `.env` file in your `Samuriser` folder:
 
 ```sh
 SAMURISER_PUBLISH_BUCKET=<bucket name>
@@ -100,7 +94,7 @@ SAMURISER_PUBLISH_SECRET=<secret access key>
 
 An article is published as its summary and key ideas, with a link to the original. To include the full text so you can read it on your phone, add `SAMURISER_PUBLISH_ARTICLE_TEXT=1`. That puts a complete copy of someone else's writing at a public address, so only do it for your own reading and keep the address to yourself.
 
-While the site is running it republishes after every change. To publish by hand, run `uv run publish`. Then open `<public address>/index.html` on your phone.
+While the site is running it republishes after every change. Then open `<public address>/index.html` on your phone.
 
 Search, marking things as watched and changing cuts only work on the local site.
 
@@ -117,7 +111,7 @@ While the site is running it checks the playlist every five minutes and shortens
 <details>
 <summary><b>Privacy: what leaves your machine</b></summary>
 
-Everything is stored in `runs/` on your computer. These are the only things that leave it:
+Everything is stored in your `Samuriser` folder on your computer. These are the only things that leave it:
 
 - **To the sites you save from:** requests for the page, captions and thumbnail, as any browser would make.
 - **To Anthropic:** the transcript or article text, and for downloaded videos a sample of frames, so Claude can summarise and decide the cuts. Claude runs with no tools, so text inside a transcript can't make it do anything.
@@ -134,14 +128,21 @@ The local site listens on `127.0.0.1` only, and accepts changes only from its ow
 - **Videos from other sites** are downloaded, because there is nowhere else to play them. That needs `ffmpeg`.
 - **Videos without captions:** only the audio is downloaded, and it is transcribed on your Mac.
 - **Natural reading voices:** run [Kokoro](https://github.com/remsky/Kokoro-FastAPI) on `127.0.0.1:8880`. Without it, the reader uses the browser's voices.
-- **A shortened video file,** with the timer and progress bars burned in: `uv run shorten <link> --ratio 0.3`.
-
-Downloads, transcripts and edits are stored in `runs/`, which is not committed.
+- **A shortened video file,** with the timer and progress bars burned in, from a copy of the code: `uv run shorten <link> --ratio 0.3`.
 
 </details>
 
 <details>
 <summary><b>Develop</b></summary>
+
+```sh
+git clone https://github.com/bull-island/samuriser.git
+cd samuriser
+uv sync
+uv run samuriser
+```
+
+Run from the code, it uses the `extension` folder there, and keeps the library in a `runs` folder there if one exists.
 
 ```sh
 uv run pytest

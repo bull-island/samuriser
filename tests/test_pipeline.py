@@ -1458,3 +1458,15 @@ def test_another_website_cannot_change_the_library(site: tuple[TestClient, Path]
     extension = {"Origin": "chrome-extension://abcdefghijklmnop"}
     assert client.post(remove, headers=extension).status_code == 200
     assert not run_dir.exists()
+
+
+def test_the_library_is_kept_at_home_unless_run_beside_a_runs_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from samuriser import web
+
+    monkeypatch.chdir(tmp_path)
+    assert web._library_dir() == web.HOME_DIR / "runs"
+
+    (tmp_path / "runs").mkdir()
+    assert web._library_dir() == Path("runs")

@@ -72,6 +72,10 @@ from samuriser.speech import is_voice_name, list_voices, write_speech
 from samuriser.transcribe import Sentence, load_sentences
 
 STATIC_DIR = Path(__file__).parent / "static"
+# Where everything lives when Samuriser is installed as a command, rather than run from its code.
+HOME_DIR = Path.home() / "Samuriser"
+# The Chrome extension, which only an installed copy carries inside the package.
+PACKAGED_EXTENSION = Path(__file__).parent / "extension"
 HOST = "127.0.0.1"
 # The names this site answers to. Another site's page can't use any of them.
 OWN_HOSTS = (HOST, "localhost")
@@ -656,19 +660,43 @@ def create_app(runs_dir: Path, start_worker: bool = True) -> FastAPI:
     return app
 
 
-def publish_main() -> None:
+def _library_dir() -> Path:
+    """The `runs` folder here if there is one, as when run from the code, or else the home folder."""
+    local = Path("runs")
+    return local if local.is_dir() else HOME_DIR / "runs"
+
+
+def _load_settings_files() -> None:
     load_dotenv()
+    load_dotenv(HOME_DIR / ".env")
+
+
+def _unpack_extension() -> None:
+    """Put the extension where Chrome's folder picker can reach it, replacing an older copy."""
+    if not PACKAGED_EXTENSION.is_dir():
+        return
+    target = HOME_DIR / "extension"
+    shutil.rmtree(target, ignore_errors=True)
+    shutil.copytree(PACKAGED_EXTENSION, target)
+    print(f"The Chrome extension is in {target}")
+
+
+def publish_main() -> None:
+    _load_settings_files()
     settings = load_settings()
     if settings is None:
-        sys.exit('Publishing isn\'t set up. See "Read it on your phone" in the README.')
-    changed = publish_library(Path("runs"), settings)
+        sys.exit('Publishing isn\'t set up. See "Use it on your phone" in the README.')
+    changed = publish_library(_library_dir(), settings)
     print(f"Published. {changed} files changed.")
 
 
 def main() -> None:
-    load_dotenv()
+    _load_settings_files()
+    runs_dir = _library_dir()
+    _unpack_extension()
     print(f"Samuriser is running at http://{HOST}:{PORT}")
-    app = create_app(Path("runs"))
+    print(f"Your library is in {runs_dir.resolve()}")
+    app = create_app(runs_dir)
     # Refuse a page that reaches this site under its own name to read the library.
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(OWN_HOSTS))
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")

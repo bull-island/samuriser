@@ -31,6 +31,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/samuriser"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"extension" = "samuriser/extension"
+
 [tool.ruff]
 line-length = 100
 
