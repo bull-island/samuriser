@@ -25,7 +25,7 @@ brew install uv node
 **2. Start Samuriser:**
 
 ```sh
-uvx --from git+https://github.com/bull-island/samuriser samuriser
+uvx --python 3.12 --from git+https://github.com/bull-island/samuriser samuriser
 ```
 
 The first start takes a few minutes while it downloads. Run the same line whenever you want to use it.
